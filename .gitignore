@@ -1,0 +1,19 @@
+# Build
+.gradle/
+.kotlin/
+build/
+app/build/
+*.apk
+*.aab
+
+# Local machine / IDE
+local.properties
+*.iml
+.idea/
+.DS_Store
+
+# Signing key — never commit
+keystore/
+keystore.properties
+*.jks
+*.keystore

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PrintHouse : le toit de TileHouse au-dessus d'un tirage dans son passe-partout.
+     Dessiné sur une grille de 130, ramené dans la zone sûre de l'icône adaptative. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.62" android:scaleY="0.62" android:translateX="13.7" android:translateY="14.3">
+        <path android:pathData="M33,45L65,23L97,45" android:strokeColor="#6F675D" android:strokeWidth="5"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path android:fillColor="#FBF8F1" android:strokeColor="#CFC7B7" android:strokeWidth="2" android:pathData="M33,55h64v50h-64z" />
+        <path android:fillColor="#8FA9B5" android:pathData="M40,62h50v36h-50z" />
+        <path android:fillColor="#F3EDE1" android:pathData="M78,72m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+        <path android:fillColor="#5F7A5E" android:pathData="M40,98V88L53,77L64,87L72,81L90,94V98Z" />
+    </group>
+</vector>

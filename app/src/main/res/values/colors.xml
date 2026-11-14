@@ -1,0 +1,7 @@
+<resources>
+    <color name="mat">#000000</color>
+    <color name="icon_bg">#EBE5D8</color>
+    <color name="paper">#F3EDE1</color>
+    <color name="pencil">#6F675D</color>
+    <color name="ink">#3A342E</color>
+</resources>

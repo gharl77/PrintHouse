@@ -1,0 +1,15 @@
+<resources>
+    <style name="Frame" parent="android:Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/mat</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+
+    <!-- Réglages : tons du carton et du crayon. -->
+    <style name="Panel" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:colorPrimary">@color/pencil</item>
+        <item name="android:colorPrimaryDark">@color/ink</item>
+        <item name="android:colorAccent">@color/pencil</item>
+        <item name="android:navigationBarColor">@color/ink</item>
+    </style>
+</resources>
