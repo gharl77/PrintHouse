@@ -3,6 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Version : année.mois.numéro (ex. 2026.11.1). Le versionCode en découle : 2026.11.1 -> 202611001.
+val appVersion = "2026.11.1"
+val appVersionCode = appVersion.split('.').map { it.toInt() }.let { (y, m, n) -> y * 100_000 + m * 1_000 + n }
+
 android {
     namespace = "com.printhouse.app"
     compileSdk = 36
@@ -11,8 +15,8 @@ android {
         applicationId = "com.printhouse.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.6"
+        versionCode = appVersionCode
+        versionName = appVersion
     }
 
     buildTypes {
