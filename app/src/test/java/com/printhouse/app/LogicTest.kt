@@ -68,13 +68,34 @@ class LogicTest {
         assertEquals(5_000L, Logic.presencePollMs(night = false, screenOff = false))
     }
 
-    @Test fun `the search for memories stays small whatever the filters`() {
+    @Test fun `the search for memories stays small, and albums and people add up`() {
         val people = (1..10).map { "p$it" }
         assertEquals(listOf<Pair<String?, String?>>(null to null), Logic.memoryCombos(emptyList(), emptyList(), 2))
         assertEquals(2, Logic.memoryCombos(emptyList(), people, 2).size)
         assertEquals(2, Logic.memoryCombos(listOf("a", "b", "c"), people, 2).size)
-        assertTrue(Logic.memoryCombos(listOf("a"), people, 2).all { it.first == "a" && it.second in people })
-        assertEquals(setOf("a" to "p1"), Logic.memoryCombos(listOf("a"), listOf("p1"), 2).toSet())
+        assertEquals(setOf<Pair<String?, String?>>("a" to null, null to "p1"), Logic.memoryCombos(listOf("a"), listOf("p1"), 5).toSet())
+        assertTrue("un album OU une personne, jamais les deux", Logic.memoryCombos(listOf("a", "b"), people, 12).none { it.first != null && it.second != null })
+    }
+
+    @Test fun `a batch is shared between the lists according to their weights`() {
+        assertEquals(listOf(4, 4, 4), Logic.shares(listOf(2, 2, 2), 12))
+        assertEquals(listOf(0, 12, 0), Logic.shares(listOf(0, 2, 0), 12))
+        assertEquals(listOf(6, 0, 6), Logic.shares(listOf(2, 0, 2), 12))
+        assertEquals("beaucoup de personnes, un peu de thèmes", listOf(10, 2, 0), Logic.shares(listOf(4, 1, 0), 12))
+        assertEquals(listOf(7, 2, 3), Logic.shares(listOf(4, 1, 2), 12))
+        assertEquals(listOf(0, 0, 0), Logic.shares(listOf(0, 0, 0), 12))
+        for (w in listOf(listOf(1, 2, 4), listOf(4, 4, 1), listOf(1, 1, 1), listOf(4, 0, 1))) {
+            val s = Logic.shares(w, 12)
+            assertEquals("$w → $s", 12, s.sum())
+            assertTrue("chaque liste non vide a sa place : $w → $s", w.indices.all { (w[it] > 0) == (s[it] > 0) })
+        }
+    }
+
+    @Test fun `a list is drawn according to its weight, empty lists never`() {
+        val weights = listOf(4, 0, 1) // personnes : beaucoup ; thèmes : liste vide ; albums : un peu
+        assertEquals(listOf(0, 0, 0, 0, 2), (0 until 5).map { Logic.pickWeighted(weights, it) })
+        assertEquals(-1, Logic.pickWeighted(listOf(0, 0, 0), 0))
+        assertEquals(1, Logic.pickWeighted(listOf(0, 2, 0), 1))
     }
 
     private val week = (22 * 60) to (6 * 60)        // 22:00 → 06:00

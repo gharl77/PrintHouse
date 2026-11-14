@@ -38,6 +38,7 @@ class Library(ctx: Context, private val settings: Settings) {
 
     val stats get() = picker.stats
     val birthdaysToday get() = picker.birthdaysToday
+    val themeError get() = picker.themeError
     val hiddenIds get() = hidden.toList()
     val hiddenCount get() = hidden.size
     val cachedCount get() = cacheDir.listFiles { f -> f.name.endsWith(".jpg") }?.size ?: 0
@@ -80,6 +81,8 @@ class Library(ctx: Context, private val settings: Settings) {
     private fun rules(): Rules {
         val r = Rules(
             sourceMode = settings.sourceMode, albums = settings.albums, persons = settings.persons,
+            themes = settings.themes, personsWeight = settings.personsWeight, themesWeight = settings.themesWeight,
+            albumsWeight = settings.albumsWeight, themeSize = settings.themeSize,
             sinceYears = settings.sinceYears, memoryShare = settings.memoryShare, seasonShare = settings.seasonShare,
             birthdayShare = settings.birthdayShare, seriesShare = settings.seriesShare, repeatDays = settings.repeatDays,
             ageCaption = settings.ageCaption, ageLimit = settings.ageLimit, skipScreenshots = settings.skipScreenshots,

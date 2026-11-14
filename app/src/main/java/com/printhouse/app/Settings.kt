@@ -56,9 +56,23 @@ class Settings(ctx: Context) {
     var pin by Secret("pin")
 
     // --- Photos
-    /** "all" (toute la bibliothèque), "favorites" ou "albums" (ceux de [albums]). */
+    /** "all" (toute la bibliothèque) ou "favorites" ; s'applique aussi aux listes ci-dessous. */
     var sourceMode by Str("sourceMode", "all")
+    /**
+     * Trois listes qui s'additionnent : albums, personnes, thèmes. Une photo passe si elle est
+     * dans l'une d'elles ; les trois vides, toute la bibliothèque.
+     */
     var albums by Choices("albums")
+    /** Thèmes cherchés par contenu dans Immich : « chien », « paysage »… */
+    var themes: List<String>
+        get() = try { JSONArray(p.getString("themes", "[]")).let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } } } catch (_: Exception) { emptyList() }
+        set(v) = p.edit().putString("themes", JSONArray(v.map { it.trim().take(60) }.filter { it.isNotEmpty() }.distinct().take(12)).toString()).apply()
+    /** Poids de chaque liste : 1 = un peu, 2 = autant que les autres, 4 = beaucoup. */
+    var personsWeight by Num("personsWeight", 2)
+    var themesWeight by Num("themesWeight", 2)
+    var albumsWeight by Num("albumsWeight", 2)
+    /** Nombre de photos gardées par thème. */
+    var themeSize by Num("themeSize", 100)
     /** Personnes à montrer (vide = tout le monde). */
     var persons by Choices("persons")
     /** Ne garder que les photos des N dernières années (0 = toutes). */
@@ -191,6 +205,15 @@ class Settings(ctx: Context) {
     val server get() = Immich.Server(url, key)
 
     init {
+        // Avant, « albums » était une source à part qui excluait le reste ; c'est maintenant une
+        // liste parmi trois. Le choix « albums » devient « toute la bibliothèque » + la liste.
+        // Des albums choisis mais laissés de côté (source « toute la bibliothèque ») ne doivent pas se
+        // mettre à compter d'un coup : on vide cette liste, une seule fois.
+        if (!p.getBoolean("listsAddUp", false)) {
+            val e = p.edit().putBoolean("listsAddUp", true)
+            if (p.getString("sourceMode", "all") == "albums") e.putString("sourceMode", "all") else e.remove("albums")
+            e.apply()
+        }
         // Ancien réglage « source » (un seul album) → nouveaux réglages.
         p.getString("source", null)?.let { old ->
             val e = p.edit().remove("source").remove("sourceLabel")

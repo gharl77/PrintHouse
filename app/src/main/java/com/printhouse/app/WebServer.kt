@@ -186,8 +186,13 @@ class WebServer(private val app: App) {
                 }
                 var step: Int? = null // 1 : la source change ; 0 : seule l'apparence change
                 fun redraw() { if (step == null) step = 0 }
-                if (req.has("sourceMode")) req.optString("sourceMode").let { if (it in setOf("all", "favorites", "albums")) { settings.sourceMode = it; step = 1 } }
+                if (req.has("sourceMode")) req.optString("sourceMode").let { if (it in setOf("all", "favorites")) { settings.sourceMode = it; step = 1 } }
                 if (req.has("albums")) { settings.albums = Choice.list(req.optJSONArray("albums")); step = 1 }
+                req.optJSONArray("themes")?.let { a -> settings.themes = (0 until a.length()).map { a.optString(it) }; step = 1 }
+                for ((k, set) in listOf<Pair<String, (Int) -> Unit>>(
+                    "personsWeight" to { v -> settings.personsWeight = v }, "themesWeight" to { v -> settings.themesWeight = v }, "albumsWeight" to { v -> settings.albumsWeight = v },
+                )) if (req.has(k)) set(req.optInt(k, 2).let { if (it in setOf(1, 2, 4)) it else 2 })
+                if (req.has("themeSize")) { settings.themeSize = req.optInt("themeSize", 100).coerceIn(10, 1000); step = 1 }
                 if (req.has("persons")) { settings.persons = Choice.list(req.optJSONArray("persons")); step = 1 }
                 if (req.has("sinceYears")) { settings.sinceYears = req.optInt("sinceYears").coerceIn(0, 100); step = 1 }
                 if (req.has("skipScreenshots")) settings.skipScreenshots = req.optBoolean("skipScreenshots")
@@ -361,6 +366,12 @@ class WebServer(private val app: App) {
         .put("keySet", settings.key.isNotEmpty())
         .put("sourceMode", settings.sourceMode)
         .put("albums", Choice.array(settings.albums))
+        .put("themes", JSONArray(settings.themes))
+        .put("personsWeight", settings.personsWeight)
+        .put("themesWeight", settings.themesWeight)
+        .put("albumsWeight", settings.albumsWeight)
+        .put("themeSize", settings.themeSize)
+        .put("themeError", app.library.themeError ?: "")
         .put("persons", Choice.array(settings.persons))
         .put("sinceYears", settings.sinceYears)
         .put("memoryShare", settings.memoryShare)

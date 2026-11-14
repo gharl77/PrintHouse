@@ -107,14 +107,31 @@ Every change is saved as you make it and applies to the frame right away. Sectio
 
 **Where the photos come from**
 
-- **Source** — the whole library, your favourites, or chosen albums. With several albums, large
-  albums come up more often than small ones.
-- **Period** — all years, or only the last 1, 2, 5, 10 or 20 years.
-- **People** — add people to show only the photos where one of them appears. With nobody
-  chosen, the frame shows everyone. Needs `person.read`.
+Three lists add up. A photo is shown if it matches any one of them; with all three empty, the
+frame draws from the whole library.
 
-Albums and people are chosen by typing a name and picking a suggestion; each choice becomes a
-token you can remove.
+- **People** — photos where one of these people appears. Needs `person.read`.
+- **Themes** — photos recognised by their content: "dog", "landscape", "snow". A theme is a
+  search, run by Immich's machine learning exactly as in Immich's own search box, so write it in
+  the language your Immich understands best. Immich ranks photos from the closest to the least
+  close without saying where the theme ends, so you choose how many to keep per theme (50 to
+  500): more gives more variety and more intruders. A double tap on the frame sets an intruder
+  aside for good. Each theme costs one request a day.
+- **Albums** — every photo of these albums, whoever is in them. Large albums come up more often
+  than small ones.
+
+Each list has a **share of the slideshow** — a little, as much as the rest, a lot — so that
+landscapes do not drown the family, or the other way round. Every batch of photos is split
+between the lists by these shares, then shuffled.
+
+Above the lists, **Draw from** limits everything to your favourites if you wish, and **Period**
+to the last 1, 2, 5, 10 or 20 years.
+
+People and albums are chosen by typing a name and picking a suggestion; themes are typed
+freely. Each choice becomes a token you can remove.
+
+"On this day" memories and season photos follow your people and albums. With themes as the
+only list they are left out, because nothing can limit them to a theme.
 
 **What is not a photo**
 

@@ -24,6 +24,9 @@ class PickerTest {
         var sameDayCalls = 0
         var peopleCalls = 0
         var peopleOfCalls = 0
+        var smartCalls = 0
+        var themes: Map<String, List<Immich.Photo>> = emptyMap()
+        var smartFails = false
         val filters = ArrayList<Immich.Filter>()
         var memoriesApi: List<Immich.Photo>? = null // null = l'API des souvenirs est refusée
         var pastYears: List<Immich.Photo> = emptyList()
@@ -33,12 +36,20 @@ class PickerTest {
         private val rnd = Random(7)
 
         /** Requêtes HTTP que tout cela aurait coûté. */
-        val requests get() = randomCalls + yearlyRequests + memoriesCalls + sameDayCalls + peopleCalls + peopleOfCalls
+        val requests get() = randomCalls + yearlyRequests + memoriesCalls + sameDayCalls + peopleCalls + peopleOfCalls + smartCalls
 
         override fun random(f: Immich.Filter, count: Int): List<Immich.Photo> {
             randomCalls++; filters.add(f)
             if (f.takenBefore != null) return seasonal.take(count)
+            // Les photos d'une personne ou d'un album portent son identifiant dans le leur.
+            val tag = f.personId ?: f.albumId
+            if (tag != null) return (1..count).map { photo("$tag-${rnd.nextInt(500)}") }
             return library.shuffled(rnd).take(count)
+        }
+        override fun smart(query: String, f: Immich.Filter, size: Int): List<Immich.Photo> {
+            smartCalls++
+            if (smartFails) throw ImmichException("Immich a répondu HTTP 500.", offline = true)
+            return (themes[query] ?: emptyList()).take(size)
         }
         override fun onThisDay(f: Immich.Filter, maxYears: Int): List<Immich.Photo> {
             onThisDayCalls++; yearlyRequests += maxYears; filters.add(f)
@@ -80,13 +91,13 @@ class PickerTest {
         p.resetIfChanged(rules)
         assertNotNull(p.next(fake, rules))
         assertEquals("aucune recherche de souvenirs avant la photo", 0, fake.onThisDayCalls)
-        assertTrue("au plus quelques requêtes pour une photo, pas ${fake.requests}", fake.requests <= 3)
+        assertTrue("au plus quelques requêtes pour une photo, pas ${fake.requests}", fake.requests <= Picker.DRAWS + 2)
         assertEquals("la recherche attend en arrière-plan", 1, later.tasks.size)
     }
 
     @Test fun `the search for memories stays under fifty requests even with ten people`() {
         val fake = Fake()
-        val rules = Rules(persons = tenPeople, sourceMode = "albums", albums = listOf(Choice("a", "A", 10), Choice("b", "B", 10)), memoryShare = 25)
+        val rules = Rules(persons = tenPeople, albums = listOf(Choice("a", "A", 10), Choice("b", "B", 10)), themes = listOf("chien"), memoryShare = 25)
         val p = picker()
         p.resetIfChanged(rules)
         p.next(fake, rules)
@@ -183,6 +194,101 @@ class PickerTest {
         assertEquals("la liste des anniversaires est lue une fois par jour", 1, fake.peopleCalls)
     }
 
+    // --- Trois listes qui s'additionnent : personnes, thèmes, albums ---
+
+    private val dog = (1..40).map { photo("chien-$it") }
+    private val land = (1..40).map { photo("paysage-$it") }
+    private fun kind(p: Immich.Photo) = when {
+        p.id.startsWith("chien") || p.id.startsWith("paysage") -> "thème"
+        p.id.startsWith("album") -> "album"
+        else -> "personne"
+    }
+
+    @Test fun `people, themes and albums add up, a photo needs only one of them`() {
+        val fake = Fake().apply { themes = mapOf("chien" to dog, "paysage" to land) }
+        val rules = Rules(persons = tenPeople.take(2), themes = listOf("chien", "paysage"), albums = listOf(Choice("album-voyages", "Voyages", 50)))
+        val p = picker()
+        p.resetIfChanged(rules)
+        val kinds = (1..90).map { kind(p.next(fake, rules)) }.toSet()
+        assertEquals(setOf("personne", "thème", "album"), kinds)
+        assertTrue("une personne OU un album par requête, jamais les deux", fake.filters.none { it.personId != null && it.albumId != null })
+        assertTrue("jamais toute la bibliothèque quand des listes sont choisies", fake.filters.none { it.personId == null && it.albumId == null })
+    }
+
+    @Test fun `each theme costs one request a day, however many photos are shown`() {
+        val fake = Fake().apply { themes = mapOf("chien" to dog, "paysage" to land) }
+        val rules = Rules(themes = listOf("chien", "paysage"))
+        val p = picker()
+        p.resetIfChanged(rules)
+        repeat(200) { assertEquals("thème", kind(p.next(fake, rules))) }
+        assertEquals(2, fake.smartCalls)
+        assertEquals("avec seulement des thèmes, rien d'autre n'est demandé à Immich", 2, fake.requests)
+    }
+
+    @Test fun `every theme gets its turn in each batch`() {
+        val fake = Fake().apply { themes = mapOf("chien" to dog, "paysage" to land) }
+        val rules = Rules(persons = tenPeople.take(2), themes = listOf("chien", "paysage"))
+        val p = picker()
+        p.resetIfChanged(rules)
+        val first = (1..12).map { p.next(fake, rules).id }
+        assertTrue("du chien dans les douze premières : $first", first.any { it.startsWith("chien") })
+        assertTrue("du paysage dans les douze premières : $first", first.any { it.startsWith("paysage") })
+    }
+
+    @Test fun `the weights decide how often each list comes up`() {
+        val fake = Fake().apply { themes = mapOf("chien" to dog) }
+        val rules = Rules(persons = tenPeople.take(1), themes = listOf("chien"), personsWeight = 4, themesWeight = 1)
+        val p = picker()
+        p.resetIfChanged(rules)
+        val kinds = (1..300).map { kind(p.next(fake, rules)) }
+        val people = kinds.count { it == "personne" }
+        val themed = kinds.count { it == "thème" }
+        assertTrue("$people personnes pour $themed thèmes", themed in 1 until people / 2)
+    }
+
+    @Test fun `the lists are mixed, not served one after the other`() {
+        val fake = Fake().apply { themes = mapOf("chien" to dog) }
+        val rules = Rules(persons = tenPeople.take(3), themes = listOf("chien"), albums = listOf(Choice("album-voyages", "Voyages", 50)))
+        val p = picker()
+        p.resetIfChanged(rules)
+        val kinds = (1..60).map { kind(p.next(fake, rules)) }
+        val longestRun = kinds.fold(0 to 0) { (best, run), _ -> best to run }.let {
+            var best = 1; var run = 1
+            for (i in 1 until kinds.size) { run = if (kinds[i] == kinds[i - 1]) run + 1 else 1; best = maxOf(best, run) }
+            best
+        }
+        assertTrue("$longestRun photos de la même liste à la suite", longestRun <= 10)
+    }
+
+    @Test fun `when the content search fails the other lists carry on, and it is reported`() {
+        val fake = Fake().apply { smartFails = true }
+        val rules = Rules(persons = tenPeople.take(2), themes = listOf("chien"))
+        val p = picker()
+        p.resetIfChanged(rules)
+        repeat(40) { assertEquals("personne", kind(p.next(fake, rules))) }
+        assertNotNull(p.themeError)
+        assertEquals("pas de nouvel essai à chaque photo", 1, fake.smartCalls)
+    }
+
+    @Test fun `with themes only and a failing search the frame is not left empty`() {
+        val fake = Fake().apply { smartFails = true }
+        val rules = Rules(themes = listOf("chien"))
+        val p = picker()
+        p.resetIfChanged(rules)
+        assertNotNull(p.next(fake, rules))
+        assertNotNull(p.themeError)
+    }
+
+    @Test fun `with themes only there are no memories or season photos, which could not be limited to them`() {
+        val fake = Fake().apply { themes = mapOf("chien" to dog); memoriesApi = listOf(photo("m1", yearsAgo = 3)); seasonal = listOf(photo("s1")) }
+        val rules = Rules(themes = listOf("chien"), memoryShare = 100, seasonShare = 100)
+        val p = picker()
+        p.resetIfChanged(rules)
+        repeat(30) { assertEquals("thème", kind(p.next(fake, rules))) }
+        later.runAll()
+        assertEquals(0, fake.memoriesCalls + fake.onThisDayCalls + fake.randomCalls)
+    }
+
     @Test fun `hidden photos and screenshots are never shown`() {
         val fake = Fake(listOf(photo("hidden"), photo("shot", name = "Screenshot_2024.jpg"), photo("good")))
         hidden.add("hidden")
@@ -195,14 +301,14 @@ class PickerTest {
 
     @Test fun `guest mode shows one album only, without people, memories or ages`() {
         val family = Rules(persons = tenPeople, memoryShare = 50, seasonShare = 25, birthdayShare = 50, ageCaption = "always")
-        val guests = family.forGuests(Choice("guest-album", "Voyages", 300))
+        val guests = family.copy(themes = listOf("chien")).forGuests(Choice("guest-album", "Voyages", 300))
         val fake = Fake().apply { people = listOf(Immich.Person("x", "Emma", "2012-01-01")) }
         val p = picker()
         p.resetIfChanged(guests)
         repeat(10) { p.next(fake, guests) }
         assertTrue(fake.filters.isNotEmpty())
         assertTrue(fake.filters.all { it.albumId == "guest-album" && it.personId == null && it.takenBefore == null })
-        assertEquals(0, fake.onThisDayCalls + fake.memoriesCalls + fake.peopleCalls + fake.peopleOfCalls)
+        assertEquals(0, fake.onThisDayCalls + fake.memoriesCalls + fake.peopleCalls + fake.peopleOfCalls + fake.smartCalls)
         assertTrue(later.tasks.isEmpty())
     }
 

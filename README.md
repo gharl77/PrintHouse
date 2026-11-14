@@ -16,7 +16,8 @@ page served by the tablet itself.
 - **Print look** — a black or cream mat with a bevelled window, lifted blacks, paper-white
   highlights, slightly held-back colours and paper grain, as strong as you like. Photos are
   never cropped.
-- **Sources** — whole library, favourites or chosen albums; filter by people and by period.
+- **Sources** — people, albums and themes that add up, each with its share of the slideshow.
+  Themes are found by content ("dog", "landscape") with Immich's smart search.
 - **On this day** — mixes in photos taken on today's date in past years.
 - **Birthdays and ages** — more photos of someone on their birthday, and their age at the time
   of the photo in the caption, from the birth dates in Immich.

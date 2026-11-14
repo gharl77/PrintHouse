@@ -12,6 +12,8 @@ import java.util.concurrent.Executor
 /** Ce dont le choix des photos a besoin d'Immich. Chaque appel coûte au moins une requête. */
 interface PhotoSource {
     fun random(f: Immich.Filter, count: Int): List<Immich.Photo>
+    /** Recherche par contenu : les [size] photos les plus proches de [query]. */
+    fun smart(query: String, f: Immich.Filter, size: Int): List<Immich.Photo>
     /** Coûte une requête par année. */
     fun onThisDay(f: Immich.Filter, maxYears: Int): List<Immich.Photo>
     /** Souvenirs préparés par Immich, sans filtre possible. */
@@ -23,6 +25,7 @@ interface PhotoSource {
 
 class ImmichSource(private val server: Immich.Server) : PhotoSource {
     override fun random(f: Immich.Filter, count: Int) = Immich.random(server, f, count)
+    override fun smart(query: String, f: Immich.Filter, size: Int) = Immich.smart(server, query, f, size)
     override fun onThisDay(f: Immich.Filter, maxYears: Int) = Immich.onThisDay(server, f, maxYears)
     override fun memories() = Immich.memories(server)
     override fun sameDay(p: Immich.Photo) = Immich.sameDay(server, p)
@@ -30,11 +33,24 @@ class ImmichSource(private val server: Immich.Server) : PhotoSource {
     override fun peopleOf(id: String) = Immich.peopleOf(server, id)
 }
 
-/** Les réglages qui gouvernent le choix des photos, figés le temps d'un choix. */
+/**
+ * Les réglages qui gouvernent le choix des photos, figés le temps d'un choix.
+ *
+ * Trois listes s'additionnent : une photo passe si elle montre l'une des [persons], correspond à
+ * l'un des [themes] (« chien », « paysage ») ou se trouve dans l'un des [albums]. Les trois vides :
+ * toute la bibliothèque. Chaque liste a un poids, pour que l'une ne noie pas les autres.
+ */
 data class Rules(
+    /** "all" (toute la bibliothèque) ou "favorites" : s'applique à tout, listes comprises. */
     val sourceMode: String = "all",
     val albums: List<Choice> = emptyList(),
     val persons: List<Choice> = emptyList(),
+    val themes: List<String> = emptyList(),
+    val personsWeight: Int = 2,
+    val themesWeight: Int = 2,
+    val albumsWeight: Int = 2,
+    /** Photos gardées par thème : Immich en renvoie toujours autant, des plus aux moins ressemblantes. */
+    val themeSize: Int = 100,
     val sinceYears: Int = 0,
     val memoryShare: Int = 0,
     val seasonShare: Int = 0,
@@ -50,12 +66,14 @@ data class Rules(
     val skipNoCamera: Boolean = false,
 ) {
     /** Tout changement de cette signature vide les files d'attente : ce ne sont plus les mêmes photos. */
-    val signature get() = listOf(sourceMode, albums.map { it.id }, persons.map { it.id }, sinceYears).joinToString("|")
-    val filtered get() = sourceMode != "all" || persons.isNotEmpty()
+    val signature get() = listOf(sourceMode, albums.map { it.id }, persons.map { it.id }, themes, themeSize, sinceYears).joinToString("|")
+    val hasLists get() = persons.isNotEmpty() || themes.isNotEmpty() || albums.isNotEmpty()
+    /** Seulement des thèmes : rien ne permet de limiter à eux les souvenirs ou les photos de saison. */
+    val themesOnly get() = themes.isNotEmpty() && persons.isEmpty() && albums.isEmpty()
 
     /** Mode invités : seulement [album], sans souvenirs, saison, anniversaires ni âges. */
     fun forGuests(album: Choice) = copy(
-        sourceMode = "albums", albums = listOf(album), persons = emptyList(),
+        sourceMode = "all", albums = listOf(album), persons = emptyList(), themes = emptyList(),
         memoryShare = 0, seasonShare = 0, birthdayShare = 0, ageCaption = "never",
     )
 }
@@ -107,6 +125,14 @@ class Picker(
     @Volatile private var generation = 0
     private var signature: String? = null
 
+    /** Les photos d'un thème, cherchées une fois par jour puis distribuées peu à peu. */
+    private class Theme(val day: String, val photos: List<Immich.Photo>, var index: Int = 0, val failedUntil: Long = 0)
+    private val themeCache = HashMap<String, Theme>()
+
+    /** Dernière erreur de la recherche par contenu, pour la page web (null = tout va bien). */
+    @Volatile var themeError: String? = null
+        private set
+
     /** Prénoms des personnes dont c'est l'anniversaire aujourd'hui. */
     val birthdaysToday get() = birthdayPeople.map { it.name }
 
@@ -119,7 +145,7 @@ class Picker(
         if (sig == signature) return false
         signature = sig
         generation++
-        queue.clear(); series.clear(); season.clear(); birthdayQueue.clear()
+        queue.clear(); series.clear(); season.clear(); birthdayQueue.clear(); themeCache.clear(); themeError = null
         birthdayDay = ""; memoriesDay = ""; memories = emptyList()
         birthdayEmptyUntil = 0L; seasonEmptyUntil = 0L
         return true
@@ -174,7 +200,7 @@ class Picker(
                         val list = memories // copie locale : la liste peut être remplacée en arrière-plan
                         if (list.isEmpty()) null else list[memoryIndex++ % list.size].also { stats.memories++ }
                     }
-                    rnd.nextInt(100) < rules.seasonShare -> {
+                    !rules.themesOnly && rnd.nextInt(100) < rules.seasonShare -> {
                         if (season.isEmpty() && t > seasonEmptyUntil) {
                             refillSeason(src, rules)
                             if (season.isEmpty()) seasonEmptyUntil = t + RETRY_EMPTY_MS
@@ -188,7 +214,7 @@ class Picker(
                 } else {
                     if (queue.isEmpty()) {
                         if (refills++ >= MAX_REFILLS) break // assez cherché : passe suivante
-                        queue.addAll(src.random(filter(rules), BATCH))
+                        refill(src, rules)
                     }
                     val q = queue.pollFirst() ?: throw ImmichException("Immich n'a renvoyé aucune photo pour ces critères.")
                     if (acceptable(q, rules, allowSeen)) { startSeries(src, rules, q); return q }
@@ -205,7 +231,7 @@ class Picker(
     fun partner(src: PhotoSource, rules: Rules, portrait: Boolean, exclude: Set<String>): Immich.Photo? {
         fun fits(p: Immich.Photo) = (if (portrait) p.portrait else p.square) == true && p.id !in exclude && acceptable(p, rules, allowSeen = false)
         if (queue.none { fits(it) } && queue.size < 2 * BATCH) {
-            try { queue.addAll(src.random(filter(rules), BATCH)) } catch (_: ImmichException) {}
+            try { refill(src, rules) } catch (_: ImmichException) {}
         }
         val found = queue.firstOrNull { fits(it) } ?: return null
         queue.remove(found)
@@ -215,19 +241,82 @@ class Picker(
     /** Remet en tête de file une compagne qui n'a finalement pas servi. */
     fun giveBack(p: Immich.Photo) = queue.addFirst(p)
 
-    /** Un album et une personne tirés au sort parmi ceux choisis (les gros albums reviennent plus souvent). */
-    private fun filter(rules: Rules): Immich.Filter {
-        val albums = if (rules.sourceMode == "albums") rules.albums else emptyList()
-        val album = if (albums.isEmpty()) null else {
-            var pick = rnd.nextInt(albums.sumOf { it.count.coerceAtLeast(1) })
-            albums.first { c -> pick -= c.count.coerceAtLeast(1); pick < 0 }
-        }
-        return Immich.Filter(
-            favorites = rules.sourceMode == "favorites",
-            albumId = album?.id,
-            personId = if (rules.persons.isEmpty()) null else rules.persons[rnd.nextInt(rules.persons.size)].id,
-            takenAfter = if (rules.sinceYears > 0) Immich.isoYearsBefore(rules.sinceYears) else null,
+    private fun base(rules: Rules) = Immich.Filter(
+        favorites = rules.sourceMode == "favorites",
+        takenAfter = if (rules.sinceYears > 0) Immich.isoYearsBefore(rules.sinceYears) else null,
+    )
+
+    private fun album(rules: Rules): Choice { // les gros albums reviennent plus souvent
+        var pick = rnd.nextInt(rules.albums.sumOf { it.count.coerceAtLeast(1) })
+        return rules.albums.first { c -> pick -= c.count.coerceAtLeast(1); pick < 0 }
+    }
+
+    /** Une liste tirée au sort selon les poids : 0 = personnes, 1 = thèmes, 2 = albums, -1 = aucune. */
+    private fun list(rules: Rules, withThemes: Boolean): Int {
+        val weights = listOf(
+            if (rules.persons.isEmpty()) 0 else rules.personsWeight.coerceAtLeast(1),
+            if (rules.themes.isEmpty() || !withThemes) 0 else rules.themesWeight.coerceAtLeast(1),
+            if (rules.albums.isEmpty()) 0 else rules.albumsWeight.coerceAtLeast(1),
         )
+        val total = weights.sum()
+        return if (total == 0) -1 else Logic.pickWeighted(weights, rnd.nextInt(total))
+    }
+
+    /**
+     * Un filtre pour une requête à Immich : une personne OU un album tirés au sort (jamais les
+     * deux, les listes s'additionnent), ou toute la bibliothèque si ces deux listes sont vides.
+     */
+    private fun filter(rules: Rules): Immich.Filter = when (list(rules, withThemes = false)) {
+        0 -> base(rules).copy(personId = rules.persons[rnd.nextInt(rules.persons.size)].id)
+        2 -> base(rules).copy(albumId = album(rules).id)
+        else -> base(rules)
+    }
+
+    /**
+     * Remplit la file d'attente. Avec des listes, chaque lot est partagé entre elles selon leur
+     * poids, puis mélangé : une requête par liste au plus, et jamais douze photos du chien à la
+     * suite, puis douze de la même personne.
+     */
+    private fun refill(src: PhotoSource, rules: Rules) {
+        if (!rules.hasLists) { queue.addAll(src.random(base(rules), BATCH)); return }
+        val weights = listOf(
+            if (rules.persons.isEmpty()) 0 else rules.personsWeight.coerceAtLeast(1),
+            if (rules.themes.isEmpty()) 0 else rules.themesWeight.coerceAtLeast(1),
+            if (rules.albums.isEmpty()) 0 else rules.albumsWeight.coerceAtLeast(1),
+        )
+        val shares = Logic.shares(weights, BATCH)
+        val got = ArrayList<Immich.Photo>()
+        if (shares[0] > 0) got += src.random(base(rules).copy(personId = rules.persons[rnd.nextInt(rules.persons.size)].id), shares[0])
+        if (shares[1] > 0) {
+            // La part des thèmes est répartie entre eux (chien et paysage dans le même lot), sans
+            // requête de plus : chaque thème est cherché une fois par jour puis gardé en mémoire.
+            val themes = rules.themes.shuffled(rnd).take(shares[1])
+            val each = Logic.shares(themes.map { 1 }, shares[1])
+            themes.forEachIndexed { i, theme -> got += themePhotos(src, rules, theme, each[i]) }
+        }
+        if (shares[2] > 0) got += src.random(base(rules).copy(albumId = album(rules).id), shares[2])
+        // Seulement des thèmes et la recherche par contenu est en panne : mieux vaut des photos au
+        // hasard qu'un cadre vide (l'erreur est signalée sur la page web).
+        if (got.isEmpty() && rules.themesOnly && themeError != null) got += src.random(base(rules), BATCH)
+        queue.addAll(got.distinctBy { it.id }.shuffled(rnd))
+    }
+
+    /** Les [count] photos suivantes d'un thème. Une requête par thème et par jour, pas davantage. */
+    private fun themePhotos(src: PhotoSource, rules: Rules, theme: String, count: Int): List<Immich.Photo> {
+        val today = dayString()
+        var t = themeCache[theme]
+        if (t == null || (t.day != today && now() > t.failedUntil) || (t.photos.isEmpty() && now() > t.failedUntil)) {
+            t = try {
+                Theme(today, src.smart(theme, base(rules), rules.themeSize.coerceIn(10, 1000)).shuffled(rnd)).also { themeError = null }
+            } catch (e: ImmichException) {
+                themeError = e.message
+                Theme(today, emptyList(), failedUntil = now() + RETRY_EMPTY_MS)
+            }
+            if (t.photos.isEmpty() && t.failedUntil == 0L) t = Theme(today, emptyList(), failedUntil = now() + RETRY_EMPTY_MS)
+            themeCache[theme] = t
+        }
+        if (t.photos.isEmpty()) return emptyList()
+        return (0 until minOf(count, t.photos.size)).map { t.photos[t.index++ % t.photos.size] }
     }
 
     /** De temps en temps, [first] est suivie de quelques photos de la même journée, dans l'ordre. */
@@ -252,7 +341,7 @@ class Picker(
      * filtre, plafonnées. En attendant, le cadre montre des photos ordinaires.
      */
     private fun ensureMemories(src: PhotoSource, rules: Rules) {
-        if (rules.memoryShare <= 0) { memories = emptyList(); return }
+        if (rules.memoryShare <= 0 || rules.themesOnly) { memories = emptyList(); return }
         val today = dayString()
         val t = now()
         if (memoriesLoading) return
@@ -264,13 +353,10 @@ class Picker(
         val forGeneration = generation
         val maxYears = if (rules.sinceYears > 0) minOf(rules.sinceYears, MEMORY_YEARS) else MEMORY_YEARS
         val base = Immich.Filter(favorites = rules.sourceMode == "favorites")
-        val combos = Logic.memoryCombos(
-            if (rules.sourceMode == "albums") rules.albums.map { it.id } else emptyList(),
-            rules.persons.map { it.id }, MEMORY_COMBOS,
-        )
+        val combos = Logic.memoryCombos(rules.albums.map { it.id }, rules.persons.map { it.id }, MEMORY_COMBOS)
         background.execute {
             val found = try {
-                val ready = if (rules.filtered) null else try {
+                val ready = if (rules.hasLists) null else try {
                     src.memories().filter { it.yearsAgo <= maxYears }
                 } catch (_: ImmichException) {
                     null // pas la permission memory.read, ou Immich trop ancien : on cherche soi-même
@@ -355,6 +441,7 @@ class Picker(
 
     companion object {
         const val BATCH = 12
+        const val DRAWS = 3                // requêtes par remplissage, au plus : une par liste
         const val ATTEMPTS = 90            // photos examinées par passe, au plus
         const val MAX_REFILLS = 5          // appels à Immich par passe, au plus
         const val RETRY_EMPTY_MS = 600_000L

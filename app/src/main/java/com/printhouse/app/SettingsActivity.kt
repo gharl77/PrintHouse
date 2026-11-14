@@ -91,12 +91,7 @@ class SettingsActivity : Activity() {
         label(tr("Photos à afficher"))
         source = Spinner(this)
         add(source)
-        val chosen = settings.albums
-        sources = listOf(
-            tr("Toute la bibliothèque") to "all",
-            tr("Favoris") to "favorites",
-            (if (chosen.isEmpty()) tr("Albums (à choisir sur la page web)") else tr("Albums choisis") + " : " + chosen.joinToString(", ") { it.name }) to "albums",
-        )
+        sources = listOf(tr("Toute la bibliothèque") to "all", tr("Favoris") to "favorites")
         source.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, sources.map { it.first })
         source.setSelection(sources.indexOfFirst { it.second == settings.sourceMode }.coerceAtLeast(0))
 
@@ -129,7 +124,7 @@ class SettingsActivity : Activity() {
         }, 28)
 
         add(TextView(this).apply {
-            val page = WebServer.localIp()?.let { "\nTous les réglages (albums, personnes, apparence, luminosité, Home Assistant, mise à jour) sont sur la page web, depuis un ordinateur du même réseau : http://$it:8080" } ?: ""
+            val page = WebServer.localIp()?.let { "\nTous les réglages (personnes, thèmes, albums, apparence, luminosité, Home Assistant, mise à jour) sont sur la page web, depuis un ordinateur du même réseau : http://$it:8080" } ?: ""
             text = "Sur le cadre : toucher ou balayer l'écran change de photo, un double toucher écarte la photo, un appui long ouvre ces réglages.$page"
             setTextIsSelectable(true)
             textSize = 13f

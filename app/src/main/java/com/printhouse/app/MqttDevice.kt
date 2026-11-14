@@ -26,7 +26,7 @@ class MqttDevice(private val app: App) : MqttClient.Listener {
         app.refreshLocks()
     }
 
-    private val sources get() = listOf("all" to tr("Toute la bibliothèque"), "favorites" to tr("Favoris"), "albums" to tr("Albums choisis"))
+    private val sources get() = listOf("all" to tr("Toute la bibliothèque"), "favorites" to tr("Favoris"))
     private val shares get() = listOf(0 to tr("Jamais"), 25 to tr("1 photo sur 4"), 50 to tr("1 photo sur 2"), 100 to tr("Seulement des souvenirs"))
     @Volatile private var lastImage: ByteArray? = null
 

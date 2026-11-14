@@ -28,6 +28,10 @@ Also in this version:
   from the camera, which leaves out scanned prints.
 - Wake by camera (off by default): when the frame is off because the room is empty, the front
   camera watches for movement and turns it back on without waiting for the presence sensor.
+- Themes: photos found by their content ("dog", "landscape") with Immich's smart search.
+- People, themes and albums are now three lists that add up, each with its share of the
+  slideshow. Before, choosing people excluded everything else, and albums and people narrowed
+  each other.
 - Guest mode: one switch, on the web page or in Home Assistant, limits the frame to one album.
 - Different night hours on Friday and Saturday nights.
 - Three square photos are grouped in one mat, like two portraits.

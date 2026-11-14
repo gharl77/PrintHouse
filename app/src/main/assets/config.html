@@ -113,6 +113,7 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
 .set input[type=range]{padding:0;border:0;background:transparent}
 .set output{flex:none;width:44px;text-align:right;color:var(--mute);font-size:13px}
 .seg{display:flex;gap:6px}
+.seg.weight button{padding:6px 10px;font-size:13px}
 .seg button.on{background:#f2f2f7;color:#1c1c1e;font-weight:600;border-color:transparent}
 </style>
 </head>
@@ -148,19 +149,13 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
 <main class="panel" data-panel="photos">
   <section class="card">
     <h2>D'où viennent les photos</h2>
+    <p class="muted">Trois listes s'additionnent : une photo passe si elle montre l'une de vos personnes, correspond à l'un de vos thèmes ou se trouve dans l'un de vos albums. Si les trois listes sont vides, le cadre pioche dans toute la bibliothèque.</p>
     <div class="set">
-      <label class="f" for="sourceMode">Source</label>
+      <label class="f" for="sourceMode">Piocher dans</label>
       <select id="sourceMode">
         <option value="all">Toute la bibliothèque</option>
-        <option value="favorites">Favoris</option>
-        <option value="albums">Albums choisis</option>
+        <option value="favorites">Mes favoris seulement</option>
       </select>
-    </div>
-    <div id="albumsBox" hidden>
-      <h3 class="sub">Albums</h3>
-      <div class="toks" id="albumsToks"></div>
-      <input id="albumsQ" type="search" placeholder="Ajouter un album…" aria-label="Rechercher un album" autocomplete="off">
-      <div class="sugs" id="albumsSugs"></div>
     </div>
     <div class="set">
       <label class="f" for="sinceYears">Période</label>
@@ -174,11 +169,48 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
   </section>
   <section class="card">
     <h2>Personnes</h2>
-    <p class="muted">Ajoutez des personnes pour ne montrer que les photos où l'une d'elles apparaît. Sans personne choisie, le cadre montre tout le monde.</p>
+    <p class="muted">Les photos où apparaît l'une de ces personnes.</p>
     <div class="toks" id="personsToks"></div>
     <input id="personsQ" type="search" placeholder="Ajouter une personne…" aria-label="Rechercher une personne" autocomplete="off">
     <div class="sugs" id="personsSugs"></div>
+    <div class="set">
+      <label class="f">Place dans le défilement</label>
+      <div class="seg weight" id="personsWeight"><button data-v="1">Un peu</button><button data-v="2">Autant que le reste</button><button data-v="4">Beaucoup</button></div>
+    </div>
     <p class="muted" id="peopleInfo"></p>
+  </section>
+  <section class="card">
+    <h2>Thèmes</h2>
+    <p class="muted">Des photos reconnues par leur contenu : « chien », « paysage », « neige »… Écrivez un thème comme vous le taperiez dans la recherche d'Immich, puis Entrée. Si Immich comprend mieux l'anglais, écrivez-le en anglais (« dog », « landscape »).</p>
+    <div class="toks" id="themesToks"></div>
+    <div class="row">
+      <input id="themesQ" placeholder="Ajouter un thème…" aria-label="Ajouter un thème" autocomplete="off" maxlength="60" style="flex:1;width:auto">
+      <button id="themesAdd">Ajouter</button>
+    </div>
+    <div class="set">
+      <label class="f">Place dans le défilement</label>
+      <div class="seg weight" id="themesWeight"><button data-v="1">Un peu</button><button data-v="2">Autant que le reste</button><button data-v="4">Beaucoup</button></div>
+    </div>
+    <div class="set">
+      <label class="f" for="themeSize">Photos retenues par thème</label>
+      <select id="themeSize">
+        <option value="50">Les 50 plus ressemblantes</option><option value="100">Les 100 plus ressemblantes</option>
+        <option value="200">Les 200 plus ressemblantes</option><option value="500">Les 500 plus ressemblantes</option>
+      </select>
+    </div>
+    <p class="muted">Immich classe les photos de la plus à la moins ressemblante, sans dire où s'arrête le thème. Un nombre plus grand donne plus de variété, mais aussi plus d'intrus ; un double toucher sur le cadre écarte une photo qui n'a rien à faire là.</p>
+    <p class="muted" id="themesInfo"></p>
+  </section>
+  <section class="card">
+    <h2>Albums</h2>
+    <p class="muted">Toutes les photos de ces albums, quelles que soient les personnes qui y figurent.</p>
+    <div class="toks" id="albumsToks"></div>
+    <input id="albumsQ" type="search" placeholder="Ajouter un album…" aria-label="Rechercher un album" autocomplete="off">
+    <div class="sugs" id="albumsSugs"></div>
+    <div class="set">
+      <label class="f">Place dans le défilement</label>
+      <div class="seg weight" id="albumsWeight"><button data-v="1">Un peu</button><button data-v="2">Autant que le reste</button><button data-v="4">Beaucoup</button></div>
+    </div>
   </section>
   <section class="card">
     <h2>Mode invités</h2>
@@ -707,7 +739,10 @@ function setSelect(id, value) {
 
 function render() {
   $("sourceMode").value = S.sourceMode;
-  $("albumsBox").hidden = S.sourceMode !== "albums";
+  drawThemes();
+  for (const id of ["personsWeight", "themesWeight", "albumsWeight"]) $(id).querySelectorAll("button").forEach(b => b.classList.toggle("on", Number(b.dataset.v) === S[id]));
+  setSelect("themeSize", S.themeSize);
+  $("themesInfo").textContent = S.themeError ? t("La recherche par contenu d'Immich ne répond pas : ") + S.themeError : "";
   drawPicker("albums");
   drawPicker("persons");
   setSelect("sinceYears", S.sinceYears);
@@ -878,6 +913,33 @@ for (const id of ["guestMode", "weekendNight", "motionWake", "pairPortraits", "c
 for (const id of ["matColor", "marginSize"]) {
   $(id).querySelectorAll("button").forEach(b => { b.onclick = () => save({[id]: b.dataset.v}); });
 }
+for (const id of ["personsWeight", "themesWeight", "albumsWeight"]) {
+  $(id).querySelectorAll("button").forEach(b => { b.onclick = () => save({[id]: Number(b.dataset.v)}); });
+}
+$("themeSize").addEventListener("change", () => save({themeSize: Number($("themeSize").value)}));
+
+// ---- Thèmes : des mots libres, cherchés par contenu dans Immich ----
+function drawThemes() {
+  const toks = $("themesToks");
+  toks.textContent = "";
+  if (!S.themes.length) toks.append(Object.assign(document.createElement("span"), {className: "none", textContent: t("Aucun thème.")}));
+  for (const theme of S.themes) {
+    const x = Object.assign(document.createElement("button"), {textContent: "×", title: t("Retirer")});
+    x.setAttribute("aria-label", t("Retirer ") + theme);
+    x.onclick = () => save({themes: S.themes.filter(v => v !== theme)});
+    const tok = Object.assign(document.createElement("span"), {className: "tok"});
+    tok.append(Object.assign(document.createElement("span"), {className: "av sq", textContent: theme.charAt(0).toUpperCase()}), theme, x);
+    toks.append(tok);
+  }
+}
+function addTheme() {
+  const v = $("themesQ").value.trim();
+  if (!v) return;
+  $("themesQ").value = "";
+  if (!S.themes.some(x => x.toLowerCase() === v.toLowerCase())) save({themes: S.themes.concat([v])});
+}
+$("themesAdd").onclick = addTheme;
+$("themesQ").addEventListener("keydown", e => { if (e.key === "Enter") addTheme(); });
 
 async function step(n) {
   try {

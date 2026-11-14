@@ -43,13 +43,44 @@ object Logic {
     }
 
     /**
-     * Combinaisons (album, personne) à parcourir pour chercher les souvenirs du jour, limitées à
-     * [cap] : chaque combinaison coûte une requête par année. Une valeur null = pas de filtre.
+     * Filtres (album, personne) à parcourir pour chercher les souvenirs du jour, limités à [cap] :
+     * chacun coûte une requête par année. Les listes s'additionnent : un album OU une personne,
+     * jamais les deux à la fois. Sans album ni personne, un seul filtre vide (toute la bibliothèque).
      */
     fun memoryCombos(albums: List<String>, persons: List<String>, cap: Int): List<Pair<String?, String?>> {
-        val a: List<String?> = if (albums.isEmpty()) listOf(null) else albums
-        val p: List<String?> = if (persons.isEmpty()) listOf(null) else persons
-        return a.flatMap { album -> p.map { person -> album to person } }.shuffled().take(cap)
+        val all = albums.map<String, Pair<String?, String?>> { it to null } + persons.map { null to it }
+        return if (all.isEmpty()) listOf(null to null) else all.shuffled().take(cap)
+    }
+
+    /**
+     * Partage [total] places entre des listes selon leur poids (0 = liste vide, sans place).
+     * Chaque liste non vide en reçoit au moins une ; la somme vaut [total] dès qu'une liste existe.
+     */
+    fun shares(weights: List<Int>, total: Int): List<Int> {
+        val sum = weights.sum()
+        if (sum <= 0) return weights.map { 0 }
+        // Parts entières d'abord (une au moins), puis les places restantes aux plus grands restes.
+        val out = weights.map { if (it <= 0) 0 else maxOf(1, total * it / sum) }.toMutableList()
+        val byRemainder = weights.indices.filter { weights[it] > 0 }.sortedByDescending { (total * weights[it]) % sum }
+        var i = 0
+        while (out.sum() < total) out[byRemainder[i++ % byRemainder.size]]++
+        // Trop de listes pour si peu de places : on reprend aux plus servies.
+        while (out.sum() > total && out.any { it > 1 }) out[out.indices.maxByOrNull { out[it] }!!]--
+        return out
+    }
+
+    /**
+     * Tire une liste au sort selon son poids, parmi celles qui ne sont pas vides. [roll] est un
+     * nombre entre 0 (inclus) et la somme des poids (exclue). Renvoie l'indice de la liste, ou -1.
+     */
+    fun pickWeighted(weights: List<Int>, roll: Int): Int {
+        var left = roll
+        for ((i, w) in weights.withIndex()) {
+            if (w <= 0) continue
+            left -= w
+            if (left < 0) return i
+        }
+        return -1
     }
 
     private val DATE = Regex("""^(\d{4})-(\d{2})-(\d{2})""")

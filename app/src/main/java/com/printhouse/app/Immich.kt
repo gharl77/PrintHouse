@@ -167,6 +167,22 @@ object Immich {
         return parse { JSONArray(text).let { arr -> (0 until arr.length()).map { photo(arr.getJSONObject(it)) } } }
     }
 
+    /**
+     * Recherche par contenu (« chien », « paysage »), faite par l'apprentissage automatique
+     * d'Immich : les [size] photos les plus proches de [query], de la plus à la moins ressemblante.
+     * Immich en renvoie toujours [size], même si peu de photos correspondent vraiment.
+     */
+    fun smart(server: Server, query: String, f: Filter, size: Int): List<Photo> {
+        val q = JSONObject().put("query", query).put("size", size).put("type", "IMAGE").put("withExif", true)
+        if (f.favorites) q.put("isFavorite", true)
+        f.takenAfter?.let { q.put("takenAfter", it) }
+        val text = json(server, "/api/search/smart", q)
+        return parse {
+            val items = JSONObject(text).optJSONObject("assets")?.optJSONArray("items")
+            (0 until (items?.length() ?: 0)).map { items!!.getJSONObject(it) }.filter { it.optString("type", "IMAGE") == "IMAGE" }.map { photo(it) }
+        }
+    }
+
     /** Photos prises à la date d'aujourd'hui les années passées (jusqu'à [maxYears] ans). */
     fun onThisDay(server: Server, f: Filter, maxYears: Int): List<Photo> {
         val out = ArrayList<Photo>()
