@@ -7,6 +7,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Mises à jour par Wi-Fi : Android demande toujours une confirmation à l'écran. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Facultatif : rallumer le cadre quand la caméra frontale voit un mouvement, seulement si l'option est activée. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
 
     <!-- usesCleartextTraffic : le serveur Immich du réseau local est souvent en http:// -->
     <application

@@ -64,17 +64,22 @@ class HaLink(private val app: App) {
                     if (absentSince == 0L) absentSince = now
                     absentMinutes = ((now - absentSince) / 60_000L).toInt()
                     if (!app.presenceOff && now - absentSince >= s.presenceDelayMinutes.coerceAtLeast(0) * 60_000L) {
+                        app.events.add(tr("Pièce vide depuis %d min : écran éteint").format(absentMinutes))
                         main.post { if (my == gen) app.setPresenceScreen(false) }
                     }
                 } else {
                     absentSince = 0L
                     absentMinutes = 0
-                    if (app.presenceOff) main.post { if (my == gen) app.setPresenceScreen(true) }
+                    if (app.presenceOff) {
+                        app.events.add(tr("Présence détectée : écran rallumé"))
+                        main.post { if (my == gen) app.setPresenceScreen(true) }
+                    }
                 }
             } catch (e: Exception) {
                 // Home Assistant injoignable : dans le doute, l'écran reste (ou revient) allumé.
                 if (my != gen) return
                 error = e.message ?: e.javaClass.simpleName
+                app.events.add("Home Assistant : $error")
                 absentSince = 0L
                 absentMinutes = 0
                 if (app.presenceOff) main.post { if (my == gen) app.setPresenceScreen(true) }

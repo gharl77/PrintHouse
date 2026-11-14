@@ -82,6 +82,14 @@ class Settings(ctx: Context) {
     var birthdayShare by Num("birthdayShare", 50)
     /** Âge des personnes dans la légende : "never", "birthday" (le jour de leur anniversaire) ou "always". */
     var ageCaption by Str("ageCaption", "always")
+    /** N'afficher l'âge que des moins de N ans (0 = tout le monde). */
+    var ageLimit by Num("ageLimit", 18)
+    /** Mode invités : le cadre ne montre que [guestAlbum], sans souvenirs, anniversaires ni âges. */
+    var guestMode by Flag("guestMode", false)
+    private var guestAlbums by Choices("guestAlbum")
+    var guestAlbum: Choice?
+        get() = guestAlbums.firstOrNull()
+        set(v) { guestAlbums = listOfNotNull(v) }
     /** Photos écartées d'un double toucher : elles ne reviennent plus. */
     var hidden: Set<String>
         get() = p.getStringSet("hidden", emptySet())!!.toSet()
@@ -101,6 +109,12 @@ class Settings(ctx: Context) {
     var night by Flag("night", true)
     var nightFrom by Str("nightFrom", "22:30")
     var nightTo by Str("nightTo", "06:30")
+    /** Heures de nuit différentes pour les nuits du vendredi et du samedi. */
+    var weekendNight by Flag("weekendNight", false)
+    var weekendFrom by Str("weekendFrom", "23:30")
+    var weekendTo by Str("weekendTo", "08:00")
+    /** Rallumer le cadre quand la caméra frontale voit un mouvement (désactivé au départ). */
+    var motionWake by Flag("motionWake", false)
     var autoBrightness by Flag("autoBrightness", true)
     var dayBrightness by Num("dayBrightness", 80)
     var eveningBrightness by Num("eveningBrightness", 25)
@@ -194,12 +208,32 @@ class Settings(ctx: Context) {
 
     private fun nowMinutes() = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
 
-    fun isNightNow(): Boolean {
+    fun isNightNow(): Boolean = isNightAt(Calendar.getInstance())
+
+    private fun isNightAt(cal: Calendar): Boolean {
         if (!night) return false
-        val from = minutes(nightFrom) ?: return false
-        val to = minutes(nightTo) ?: return false
-        val now = nowMinutes()
-        return if (from <= to) now in from until to else now >= from || now < to
+        val week = (minutes(nightFrom) ?: return false) to (minutes(nightTo) ?: return false)
+        val weekend = if (weekendNight) {
+            val f = minutes(weekendFrom)
+            val t = minutes(weekendTo)
+            if (f != null && t != null) f to t else null
+        } else null
+        val day = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1 // dimanche = 1 chez Calendar → lundi = 1
+        return Logic.isNight(cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE), day, week, weekend)
+    }
+
+    /** Le prochain instant où la nuit se termine (millisecondes), ou null sans nuit dans les deux jours. */
+    fun nextNightEnd(): Long? {
+        if (!night) return null
+        val cal = Calendar.getInstance().apply { set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
+        var before = isNightAt(cal)
+        repeat(2 * 1440) {
+            cal.add(Calendar.MINUTE, 1)
+            val now = isNightAt(cal)
+            if (before && !now) return cal.timeInMillis
+            before = now
+        }
+        return null
     }
 
     /**

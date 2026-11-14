@@ -15,6 +15,7 @@ and troubleshooting.
   - [Connection](#connection)
   - [Home Assistant](#home-assistant)
   - [Security & backups](#security--backups)
+  - [Log](#log)
   - [About & updates](#about--updates)
 - [Keeping the frame on screen](#keeping-the-frame-on-screen)
 - [Privacy and security](#privacy-and-security)
@@ -53,8 +54,9 @@ shows the address of its web settings page.
    | `asset.read` | Finding photos, reading their date and place |
    | `asset.view` | Displaying the images |
    | `album.read` | Listing albums and showing photos from chosen albums |
-   | `person.read` | Optional — choosing people, and their names in photo details |
+   | `person.read` | Optional — choosing people, ages, and names in photo details |
    | `asset.update` | Optional — adding a photo to favourites from the frame |
+   | `memory.read` | Optional — "On this day" in a single request instead of about fifty |
 
 3. On the tablet, long-press the screen and enter the Immich address (for example
    `http://192.168.1.10:2283`) and the key. Or open the web settings page from a computer and
@@ -135,7 +137,8 @@ These images stay in Immich; the frame just skips them.
   in a past year is shown: winter in winter, summer in summer.
 - **Do not show a photo again for** — 3 days to 1 month. The frame remembers what it has shown
   and avoids it; if the filters leave nothing else, it shows a recent photo rather than nothing.
-- **Two portrait photos side by side** — pairs two portrait photos in the same mat.
+- **Group two portrait photos, or three square ones** — in the same mat, each with its
+  caption.
 - **Caption under the photo** — place and month, in pencil-like italics.
 
 ![A memory from five years ago](screenshots/frame-memory.jpg)
@@ -150,10 +153,19 @@ Both use the birth dates entered in Immich (on each person's page) and need `per
   their photos. With people chosen above, only their birthdays count.
 - **Age in the caption** — never, on their birthday only, or always: "Emma, 3 years old ·
   Lisbon · July 2019", for up to two people per photo. Babies get months.
+- **Show the age of** — everyone, or only people under 18 (the default), 13 or 6 at the time of
+  the photo.
 
-The age is worked out from the date Immich holds for the photo. A scanned print, or a photo of
-a photo, carries the date it was scanned unless you corrected it in Immich, and then shows the
-wrong age.
+The age is worked out from the date Immich holds for the photo, and is shown only when that
+date comes from the camera. A scanned print with no camera date gets no age. An old print
+re-photographed with a phone carries the phone's date and would show a wrong age: correct its
+date in Immich.
+
+**Guest mode**
+
+One switch limits the frame to a single album of your choice — no people filter, memories,
+birthdays or ages — and your usual settings return when you turn it off. The same switch exists
+in Home Assistant when MQTT is enabled.
 
 **On the frame** shows a live preview of the frame, what is currently displayed, and
 **Previous** and **Next** buttons. Under it:
@@ -190,6 +202,12 @@ back** button, and a button to show them all again.
   print. Turn it off to leave brightness to the tablet.
 - **Night** — between the start and end times the screen goes black, then the tablet really
   sleeps; it wakes by itself at the end time. During the day the screen always stays on.
+  Friday and Saturday nights can have their own hours.
+- **Wake by camera** — off by default. When the frame has turned off because the room is
+  empty, the tablet's front camera watches for movement and turns the frame back on at once,
+  without waiting for the presence sensor. Images are compared at very low resolution inside
+  the tablet and discarded; nothing is recorded or sent. The camera is off at night and
+  whenever the frame is on. Android asks for camera access on the tablet when you enable it.
 
 ### Connection
 
@@ -230,6 +248,7 @@ broker, user and password. The frame then appears under the MQTT integration as 
 | Current photo | Image | The picture currently on the frame, mat included |
 | Day brightness, Evening brightness | Numbers | 1–100 % |
 | Battery, Charging | Sensor, binary sensor | The tablet's battery level and whether it is charging |
+| Guest mode | Switch | Limits the frame to the guest album |
 | Photo source | Select | Whole library, favourites, chosen albums |
 | On this day | Select | Never, 1 photo in 4, 1 in 2, memories only |
 
@@ -271,6 +290,15 @@ frame can be woken remotely when its screen is off.
 - **Backup** — export every setting to a JSON file and restore it later or on another tablet.
   Secrets (Immich key, Home Assistant token, MQTT password, PIN) are left out unless you tick
   the box; a backup restored without them keeps the secrets already on the tablet.
+
+### Log
+
+![The Log section](screenshots/web-log.png)
+
+The frame keeps its last 300 events on the tablet: when and why the screen turned off or came
+back on (night, empty room, Screen switch, a touch, movement seen by the camera), errors
+talking to Immich or Home Assistant, photos that took more than three seconds to arrive,
+updates and restarts. When the frame was black or seemed frozen, this is where to look.
 
 ### About & updates
 
@@ -322,6 +350,7 @@ time you must allow PrintHouse to install apps. After an update the frame restar
 | A message saying Immich is unreachable | Wrong address, Immich is down, or the tablet is off the network. The frame keeps showing the photos it has stored |
 | MQTT: "not authorised" | The broker rejected the user or password. With the Mosquitto add-on, use the login name of a Home Assistant user |
 | The screen turns off while you are in the room | The sensor is a motion sensor. Use a presence sensor or a longer delay |
+| You wonder why the frame was off, or slow | Open the **Log** section of the settings page |
 | The frame is black when you walk in | The presence sensor has not noticed you yet. Touch the frame, or wait a few seconds |
 | The same few photos keep coming back | The filters (albums, people, period, not-a-photo) leave few photos to choose from |
 | The update asks to "allow from this source" | Normal the first time: allow it on the tablet, then send the file again |
@@ -356,14 +385,18 @@ and signed with the development key.
 ./gradlew testReleaseUnitTest
 ```
 
-runs the unit tests: the time, age, birthday and version calculations, the screenshot rule, and
-a check that every French text of the app and of the web page has its English translation.
+runs the unit tests: the time, night, age, birthday and version calculations, the screenshot
+rule, the choice of photos against a fake Immich that counts requests (no setting may make one
+photo cost more than a handful), and a check that every French text of the app and of the web
+page has its English translation.
 
 | File | Role |
 | --- | --- |
 | `MainActivity.kt`, `FrameView.kt` | The frame: gestures, fades, night, brightness |
 | `PrintRenderer.kt` | Draws the mat and the prints |
-| `Library.kt`, `Immich.kt` | Choosing photos; talking to Immich |
+| `Picker.kt` | Choosing the next photo; no Android, tested against a fake Immich |
+| `Library.kt`, `Immich.kt` | Pages, history, offline reserve; talking to Immich |
+| `EventLog.kt`, `MotionWake.kt` | The log; wake by camera |
 | `Logic.kt` | Pure calculations, covered by the unit tests |
 | `WebServer.kt`, `assets/config.html` | The settings page and its API |
 | `HaLink.kt`, `MqttDevice.kt`, `MqttClient.kt` | Home Assistant by token; MQTT device |

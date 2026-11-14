@@ -100,6 +100,11 @@ h2{margin:0 0 10px;font-size:17px}
 .recent figcaption{font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .recent .acts{display:flex;gap:4px}
 .recent .acts button{flex:1;padding:4px 6px;font-size:12px}
+.log{list-style:none;margin:0;padding:0;font-size:14px}
+.log li{display:flex;gap:14px;padding:7px 0;border-top:1px solid var(--line)}
+.log li:first-child{border-top:0}
+.log time{flex:none;width:150px;color:var(--mute);font-variant-numeric:tabular-nums}
+.log .day{color:var(--mute);font-size:12px;padding-top:14px;border-top:0}
 .hid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin:8px 0}
 .hid figure{margin:0;display:grid;gap:6px}
 .hid .th{aspect-ratio:1;border-radius:10px;background:var(--card2) center/cover no-repeat}
@@ -127,6 +132,7 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
     <button data-tab="conn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 0 1-10 0zM12 17v4"/></svg><span>Connexion</span></button>
     <button data-tab="ha"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12h-6v-7H9v7z"/></svg><span>Home Assistant</span></button>
     <button data-tab="security"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v9H6zM8 11V8a4 4 0 1 1 8 0v3"/></svg><span>Sécurité et copies</span></button>
+    <button data-tab="log"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg><span>Journal</span></button>
     <button data-tab="about"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v6M12 7.5h.01"/></svg><span>À propos et mise à jour</span></button>
   </nav>
 </aside>
@@ -175,6 +181,16 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
     <p class="muted" id="peopleInfo"></p>
   </section>
   <section class="card">
+    <h2>Mode invités</h2>
+    <p class="muted">Quand il est activé, le cadre ne montre que l'album choisi ici : ni personnes, ni souvenirs, ni anniversaires, ni âges. Vos réglages habituels reviennent dès que vous le désactivez.</p>
+    <label class="check"><input type="checkbox" id="guestMode"> Activer le mode invités</label>
+    <div class="set">
+      <label class="f" for="guestAlbum">Album à montrer</label>
+      <select id="guestAlbum"></select>
+    </div>
+    <p class="muted" id="guestInfo"></p>
+  </section>
+  <section class="card">
     <h2>Ce qui n'est pas une photo</h2>
     <p class="muted">Ces images restent dans Immich ; le cadre ne les montre simplement pas.</p>
     <label class="check"><input type="checkbox" id="skipScreenshots"> Écarter les captures d'écran</label>
@@ -219,7 +235,7 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
         <option value="14">2 semaines</option><option value="30">1 mois</option>
       </select>
     </div>
-    <label class="check"><input type="checkbox" id="pairPortraits"> Deux photos verticales côte à côte</label>
+    <label class="check"><input type="checkbox" id="pairPortraits"> Regrouper deux photos verticales, ou trois carrées</label>
     <label class="check"><input type="checkbox" id="caption"> Légende sous la photo (lieu et date)</label>
   </section>
   <section class="card">
@@ -237,6 +253,14 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
         <option value="never">Jamais</option><option value="birthday">Le jour de l'anniversaire</option><option value="always">Toujours</option>
       </select>
     </div>
+    <div class="set">
+      <label class="f" for="ageLimit">Afficher l'âge de</label>
+      <select id="ageLimit">
+        <option value="0">Tout le monde</option><option value="18">Moins de 18 ans</option>
+        <option value="13">Moins de 13 ans</option><option value="6">Moins de 6 ans</option>
+      </select>
+    </div>
+    <p class="muted">L'âge n'est affiché que si la date vient de l'appareil photo. Une photo ancienne rephotographiée avec un téléphone porte la date du téléphone : corrigez-la dans Immich pour un âge juste.</p>
     <p class="muted" id="birthdayInfo"></p>
   </section>
   <section class="card">
@@ -318,7 +342,22 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
       <label class="f" for="nightTo">Fin</label>
       <input id="nightTo" class="time" type="time">
     </div>
+    <label class="check"><input type="checkbox" id="weekendNight"> Autres heures les nuits du vendredi et du samedi</label>
+    <div class="set">
+      <label class="f" for="weekendFrom">Début, le vendredi et le samedi soir</label>
+      <input id="weekendFrom" class="time" type="time">
+    </div>
+    <div class="set">
+      <label class="f" for="weekendTo">Fin, le samedi et le dimanche matin</label>
+      <input id="weekendTo" class="time" type="time">
+    </div>
     <p class="muted" id="nightInfo"></p>
+  </section>
+  <section class="card">
+    <h2>Réveil par la caméra</h2>
+    <p class="muted">Quand le cadre s'est éteint parce que la pièce est vide, la caméra frontale de la tablette guette un mouvement et le rallume aussitôt, sans attendre le capteur de présence. Les images sont analysées en très basse résolution dans la tablette, puis jetées : rien n'est enregistré ni envoyé. La caméra est arrêtée la nuit et dès que le cadre est allumé.</p>
+    <label class="check"><input type="checkbox" id="motionWake"> Rallumer le cadre quand la caméra voit un mouvement</label>
+    <p class="muted" id="cameraInfo"></p>
   </section>
 </main>
 
@@ -333,7 +372,7 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
       <label class="f" for="key">Clé API</label>
       <input id="key" type="password" placeholder="Coller la clé ici" autocomplete="off">
     </div>
-    <p class="muted">Dans Immich : votre profil (en haut à droite) → Paramètres du compte → Clés API → Nouvelle clé. Permissions à cocher : asset.read, asset.view, album.read et, pour choisir des personnes, person.read. La clé reste chiffrée sur la tablette et n'est jamais renvoyée à cette page.</p>
+    <p class="muted">Dans Immich : votre profil (en haut à droite) → Paramètres du compte → Clés API → Nouvelle clé. Permissions à cocher : asset.read, asset.view, album.read. Facultatives : person.read (choisir des personnes, âges), asset.update (favoris depuis le cadre), memory.read (souvenirs en une seule requête). La clé reste chiffrée sur la tablette et n'est jamais renvoyée à cette page.</p>
     <div class="row">
       <button class="primary" id="saveConn">Enregistrer et connecter</button>
       <span id="connInfo" class="muted"></span>
@@ -380,7 +419,7 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
   </section>
   <section class="card">
     <h2>Cadre visible dans Home Assistant (MQTT)</h2>
-    <p class="muted">Le jeton sert à lire votre capteur ; MQTT sert à montrer le cadre dans Home Assistant. Il y apparaît comme un appareil, avec un interrupteur « Écran », des boutons photo suivante et précédente, la photo en cours (image et légende), la luminosité de jour et du soir, la source des photos, la part de « Ce jour-là », et la batterie de la tablette (pour couper sa charge avec une prise connectée).</p>
+    <p class="muted">Le jeton sert à lire votre capteur ; MQTT sert à montrer le cadre dans Home Assistant. Il y apparaît comme un appareil, avec un interrupteur « Écran », des boutons photo suivante et précédente, la photo en cours (image et légende), la luminosité de jour et du soir, la source des photos, la part de « Ce jour-là », le mode invités, et la batterie de la tablette (pour couper sa charge avec une prise connectée).</p>
     <span id="mqttStatus" class="badge">…</span>
     <label class="check"><input type="checkbox" id="mqttEnabled"> Activer MQTT</label>
     <div class="row">
@@ -426,6 +465,18 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
       <button id="importBtn">Restaurer une sauvegarde…</button>
       <input type="file" id="importFile" accept=".json,application/json" hidden>
     </div>
+  </section>
+</main>
+
+<main class="panel" data-panel="log" hidden>
+  <section class="card">
+    <div class="row">
+      <h2 style="flex:1;margin:0">Événements</h2>
+      <button id="logRefresh">Actualiser</button>
+      <button id="logClear">Effacer</button>
+    </div>
+    <ul class="log" id="logList"></ul>
+    <p class="muted" id="logInfo"></p>
   </section>
 </main>
 
@@ -509,6 +560,7 @@ const TABS = {
   conn: ["Connexion", t("Le serveur Immich d'où viennent les photos.")],
   ha: [t("Home Assistant"), t("Éteindre le cadre quand il n'y a personne pour le regarder.")],
   security: [t("Sécurité et copies"), t("Qui peut changer les réglages, et comment les sauvegarder.")],
+  log: [t("Journal"), t("Ce qui est arrivé au cadre : écran éteint ou rallumé et pourquoi, erreurs, photos lentes.")],
   about: [t("À propos et mise à jour"), ""],
 };
 
@@ -559,6 +611,7 @@ function showTab(name) {
   $("pageLead").textContent = TABS[name][1];
   $("navSelect").value = name;
   try { localStorage.setItem("tab", name); } catch (e) {}
+  if (name === "log" && S) drawLog();
 }
 for (const k in TABS) $("navSelect").append(new Option(TABS[k][0], k));
 $("navSelect").onchange = e => showTab(e.target.value);
@@ -665,6 +718,22 @@ function render() {
   setSelect("repeatDays", S.repeatDays);
   setSelect("birthdayShare", S.birthdayShare);
   $("ageCaption").value = S.ageCaption;
+  setSelect("ageLimit", S.ageLimit);
+  $("guestMode").checked = S.guestMode;
+  const ga = $("guestAlbum"), gid = S.guestAlbum ? S.guestAlbum.id : "";
+  ga.textContent = "";
+  ga.append(new Option(t("— Choisir un album —"), ""));
+  const guestChoices = albums.concat(S.guestAlbum && !albums.some(a => a.id === gid) ? [S.guestAlbum] : []);
+  for (const a of guestChoices) ga.append(new Option(a.name + (a.count ? " (" + a.count + ")" : ""), a.id));
+  ga.value = gid;
+  $("guestInfo").textContent = S.guestMode && !S.guestAlbum ? t("Choisissez un album : sans album, le mode invités ne change rien.") : (S.guestMode ? t("Le mode invités est actif.") : "");
+  $("weekendNight").checked = S.weekendNight;
+  $("weekendFrom").value = hhmm(S.weekendFrom);
+  $("weekendTo").value = hhmm(S.weekendTo);
+  $("motionWake").checked = S.motionWake;
+  $("cameraInfo").textContent = S.camera === "none" ? t("Cette tablette n'a pas de caméra frontale.")
+    : (S.motionWake && S.camera === "denied" ? t("Il reste à accorder l'accès à la caméra : la tablette vous le demande à l'écran.")
+    : (S.motionWake ? t("Actif : la caméra ne s'allume que lorsque le cadre est éteint pour cause de pièce vide.") : ""));
   $("birthdayInfo").textContent = S.birthdaysToday.length ? t("Aujourd'hui, c'est l'anniversaire de ") + S.birthdaysToday.join(", ") + "." : "";
   $("printStrength").value = S.printStrength;
   $("printStrengthOut").textContent = S.printStrength + " %";
@@ -773,6 +842,7 @@ async function load() {
   S = await api("GET", "/api/state");
   render();
   await checkImmich();
+  if (!document.querySelector('[data-panel="log"]').hidden) drawLog();
   if (S.ha.url && S.ha.tokenSet) loadHaEntities().catch(() => {});
 }
 // L'état du capteur de présence est relu tant que l'onglet Home Assistant est ouvert.
@@ -792,17 +862,17 @@ async function save(body) {
     saved(t("Enregistré"));
   } catch (e) { fail(e); }
 }
-for (const id of ["sourceMode", "nightFrom", "nightTo", "morningFrom", "eveningFrom"]) {
+for (const id of ["sourceMode", "nightFrom", "nightTo", "morningFrom", "eveningFrom", "weekendFrom", "weekendTo"]) {
   $(id).addEventListener("change", () => { if ($(id).value) save({[id]: $(id).value}); });
 }
-for (const id of ["sinceYears", "interval", "memoryShare", "seriesShare", "seasonShare", "repeatDays", "birthdayShare", "printStrength", "dayBrightness", "eveningBrightness"]) {
+for (const id of ["ageLimit", "sinceYears", "interval", "memoryShare", "seriesShare", "seasonShare", "repeatDays", "birthdayShare", "printStrength", "dayBrightness", "eveningBrightness"]) {
   $(id).addEventListener("change", () => save({[id]: Number($(id).value)}));
 }
 $("ageCaption").addEventListener("change", () => save({ageCaption: $("ageCaption").value}));
 for (const id of ["dayBrightness", "eveningBrightness", "printStrength"]) {
   $(id).addEventListener("input", () => { $(id + "Out").textContent = $(id).value + " %"; });
 }
-for (const id of ["pairPortraits", "caption", "night", "autoBrightness", "skipScreenshots", "skipSmall", "skipNoCamera", "tabletLock"]) {
+for (const id of ["guestMode", "weekendNight", "motionWake", "pairPortraits", "caption", "night", "autoBrightness", "skipScreenshots", "skipSmall", "skipNoCamera", "tabletLock"]) {
   $(id).addEventListener("change", () => save({[id]: $(id).checked}));
 }
 for (const id of ["matColor", "marginSize"]) {
@@ -890,6 +960,32 @@ async function drawHidden() {
 $("clearHidden").onclick = async () => {
   try { S = await api("POST", "/api/hidden/clear", {}); render(); saved(t("Photos réaffichées")); } catch (e) { fail(e); }
 };
+
+$("guestAlbum").addEventListener("change", () => {
+  const a = albums.find(x => x.id === $("guestAlbum").value);
+  save({guestAlbum: a || null});
+});
+
+// ---- Journal ----
+async function drawLog() {
+  let events = [];
+  try { events = (await api("GET", "/api/log")).events; } catch (e) { return; }
+  const ul = $("logList");
+  ul.textContent = "";
+  let lastDay = "";
+  for (const ev of events.slice().reverse()) {
+    const d = new Date(ev.t);
+    const day = d.toLocaleDateString(document.documentElement.lang, {weekday: "long", day: "numeric", month: "long"});
+    if (day !== lastDay) { ul.append(Object.assign(document.createElement("li"), {className: "day", textContent: day})); lastDay = day; }
+    const li = document.createElement("li");
+    li.append(Object.assign(document.createElement("time"), {textContent: d.toLocaleTimeString(document.documentElement.lang, {hour: "2-digit", minute: "2-digit", second: "2-digit"})}),
+      Object.assign(document.createElement("span"), {textContent: ev.text}));
+    ul.append(li);
+  }
+  $("logInfo").textContent = events.length ? t("Les 300 derniers événements sont gardés sur la tablette.") : t("Aucun événement pour l'instant.");
+}
+$("logRefresh").onclick = drawLog;
+$("logClear").onclick = async () => { try { await api("POST", "/api/log/clear", {}); drawLog(); } catch (e) { fail(e); } };
 
 // ---- Sauvegarde ----
 $("expSecrets").onchange = () => { $("expWarn").hidden = !$("expSecrets").checked; };

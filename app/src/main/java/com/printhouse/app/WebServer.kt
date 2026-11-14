@@ -181,7 +181,7 @@ class WebServer(private val app: App) {
                 ok(state())
             }
             "POST /api/settings" -> {
-                for (k in listOf("nightFrom", "nightTo", "eveningFrom", "morningFrom")) {
+                for (k in listOf("nightFrom", "nightTo", "eveningFrom", "morningFrom", "weekendFrom", "weekendTo")) {
                     if (req.has(k) && Settings.minutes(req.optString(k)) == null) return Reply(400, JSON, err("Heure invalide : écrivez-la comme 22:30."))
                 }
                 var step: Int? = null // 1 : la source change ; 0 : seule l'apparence change
@@ -201,6 +201,16 @@ class WebServer(private val app: App) {
                     I18n.init(settings)
                     redraw()
                 }
+                if (req.has("ageLimit")) settings.ageLimit = req.optInt("ageLimit").coerceIn(0, 120)
+                if (req.has("guestMode")) { settings.guestMode = req.optBoolean("guestMode"); step = 1 }
+                if (req.has("guestAlbum")) {
+                    settings.guestAlbum = Choice.list(JSONArray().put(req.optJSONObject("guestAlbum") ?: JSONObject())).firstOrNull()
+                    if (settings.guestMode) step = 1
+                }
+                if (req.has("weekendNight")) settings.weekendNight = req.optBoolean("weekendNight")
+                if (req.has("weekendFrom")) settings.weekendFrom = req.optString("weekendFrom").trim()
+                if (req.has("weekendTo")) settings.weekendTo = req.optString("weekendTo").trim()
+                if (req.has("motionWake")) settings.motionWake = req.optBoolean("motionWake")
                 if (req.has("seasonShare")) settings.seasonShare = req.optInt("seasonShare").coerceIn(0, 100)
                 if (req.has("repeatDays")) settings.repeatDays = req.optInt("repeatDays").coerceIn(0, 365)
                 if (req.has("birthdayShare")) settings.birthdayShare = req.optInt("birthdayShare").coerceIn(0, 100)
@@ -271,6 +281,8 @@ class WebServer(private val app: App) {
             }
             // Pour vérifier la relance automatique après une erreur fatale.
             "POST /api/crash/test" -> { main.postDelayed({ throw IllegalStateException("Essai de plantage demandé depuis la page web") }, 300); ok(JSONObject().put("ok", true)) }
+            "GET /api/log" -> ok(JSONObject().put("events", app.events.json()))
+            "POST /api/log/clear" -> { app.events.clear(); ok(JSONObject().put("events", JSONArray())) }
             "GET /api/hidden" -> ok(JSONObject().put("ids", JSONArray(app.library.hiddenIds)))
             "POST /api/hidden/restore" -> { app.library.restore(req.optString("id")); ok(state()) }
             "POST /api/export" -> ok(settings.export(req.optBoolean("secrets")).put("version", app.version))
@@ -365,6 +377,14 @@ class WebServer(private val app: App) {
             .put("repo", settings.updateRepo)
             .put("latest", app.updater.latest)
             .put("available", app.updater.available))
+        .put("ageLimit", settings.ageLimit)
+        .put("guestMode", settings.guestMode)
+        .put("guestAlbum", settings.guestAlbum?.json() ?: JSONObject.NULL)
+        .put("weekendNight", settings.weekendNight)
+        .put("weekendFrom", settings.weekendFrom)
+        .put("weekendTo", settings.weekendTo)
+        .put("motionWake", settings.motionWake)
+        .put("camera", if (!MotionWake.hasFrontCamera(app)) "none" else if (MotionWake.hasPermission(app)) "granted" else "denied")
         .put("seasonShare", settings.seasonShare)
         .put("repeatDays", settings.repeatDays)
         .put("birthdayShare", settings.birthdayShare)

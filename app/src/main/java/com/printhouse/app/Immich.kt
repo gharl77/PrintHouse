@@ -34,8 +34,8 @@ object Immich {
 
     data class Photo(
         val id: String, val date: String?, val city: String?, val country: String?,
-        /** Photo verticale d'après ses métadonnées (null = inconnu). */
-        val portrait: Boolean? = null,
+        /** Largeur / hauteur d'après les métadonnées (null = inconnu). */
+        val ratio: Float? = null,
         /** Souvenir « Ce jour-là » : nombre d'années écoulées (0 = photo ordinaire). */
         val yearsAgo: Int = 0,
         val fileName: String = "",
@@ -46,7 +46,13 @@ object Immich {
         val longSide: Int = 0,
         /** « Ophélie, 3 ans » : âge des personnes au moment de la photo (vide = non affiché). */
         val ages: String = "",
+        /** La date vient de l'appareil photo (et non du fichier) : on peut en déduire un âge. */
+        val dateReliable: Boolean = false,
     ) {
+        /** Photo verticale, ou à peu près carrée, d'après ses métadonnées (null = inconnu). */
+        val portrait get() = ratio?.let { it < PORTRAIT_BELOW }
+        val square get() = ratio?.let { it in PORTRAIT_BELOW..SQUARE_BELOW }
+
         val looksLikeScreenshot get() = Logic.looksLikeScreenshot(fileName, mime, hasCamera)
 
         /** « Québec · juillet 2019 », ou « Québec · il y a 5 ans » pour un souvenir. */
@@ -63,6 +69,8 @@ object Immich {
             .put("country", country ?: "").put("yearsAgo", yearsAgo).put("ages", ages)
 
         companion object {
+            const val PORTRAIT_BELOW = 0.85f
+            const val SQUARE_BELOW = 1.18f
             fun from(o: JSONObject) = Photo(
                 o.getString("id"), o.optString("date").ifEmpty { null }, o.optString("city").ifEmpty { null },
                 o.optString("country").ifEmpty { null }, null, o.optInt("yearsAgo"), ages = o.optString("ages"),
@@ -119,17 +127,20 @@ object Immich {
         var w = exif?.optInt("exifImageWidth") ?: 0
         var h = exif?.optInt("exifImageHeight") ?: 0
         if (exif?.text("orientation") in setOf("5", "6", "7", "8")) w = h.also { h = w }
+        if (w <= 0 || h <= 0) { w = a.optInt("width"); h = a.optInt("height") } // dimensions de la fiche, déjà redressées
+        val hasCamera = exif?.let { it.text("make") != null || it.text("model") != null }
         return Photo(
             id = a.getString("id"),
             date = a.text("localDateTime") ?: exif?.text("dateTimeOriginal") ?: a.text("fileCreatedAt"),
             city = exif?.text("city"),
             country = exif?.text("country"),
-            portrait = if (w > 0 && h > 0) w.toFloat() / h < 0.85f else null,
+            ratio = if (w > 0 && h > 0) w.toFloat() / h else null,
             yearsAgo = yearsAgo,
             fileName = a.text("originalFileName") ?: "",
             mime = a.text("originalMimeType") ?: "",
-            hasCamera = exif?.let { it.text("make") != null || it.text("model") != null },
+            hasCamera = hasCamera,
             longSide = maxOf(w, h),
+            dateReliable = exif?.text("dateTimeOriginal") != null && hasCamera != false,
         )
     }
 
@@ -256,6 +267,28 @@ object Immich {
     /** Petite vignette d'une photo, pour la page web. */
     fun thumbnail(server: Server, id: String): ByteArray =
         call(server, "/api/assets/$id/thumbnail?size=thumbnail", null, "image/*") { it.readBytes() }
+
+    /**
+     * Les souvenirs « Ce jour-là » préparés par Immich lui-même, en une seule requête (permission
+     * memory.read). Ils couvrent toute la bibliothèque : à n'utiliser que sans filtre d'album ou
+     * de personne.
+     */
+    fun memories(server: Server): List<Photo> {
+        val day = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date())
+        val text = json(server, "/api/memories?for=$day&type=on_this_day")
+        val thisYear = Calendar.getInstance().get(Calendar.YEAR)
+        return parse {
+            val arr = JSONArray(text)
+            (0 until arr.length()).flatMap { i ->
+                val m = arr.getJSONObject(i)
+                val year = m.optJSONObject("data")?.optInt("year") ?: 0
+                val assets = m.optJSONArray("assets") ?: JSONArray()
+                if (m.optString("type") != "on_this_day" || year <= 0 || year >= thisYear) emptyList()
+                else (0 until assets.length()).map { assets.getJSONObject(it) }
+                    .filter { it.optString("type") == "IMAGE" }.map { photo(it, yearsAgo = thisYear - year) }
+            }
+        }
+    }
 
     fun albums(server: Server): List<Choice> = parse {
         val arr = JSONArray(json(server, "/api/albums"))

@@ -19,6 +19,23 @@ Fixes for a frame that looked frozen in the morning.
 - At most a handful of requests are made to Immich for one photo, however tight the filters.
 - A short "One moment…" appears when a photo takes more than two seconds to arrive.
 
+Also in this version:
+
+- Log: the web page shows what happened to the frame — screen off or back on and why (night,
+  empty room, touch), errors, slow photos — so a black or frozen frame can be explained without
+  plugging the tablet into a computer.
+- Ages: shown for people under 18 by default (adjustable), and only when the photo's date comes
+  from the camera, which leaves out scanned prints.
+- Wake by camera (off by default): when the frame is off because the room is empty, the front
+  camera watches for movement and turns it back on without waiting for the presence sensor.
+- Guest mode: one switch, on the web page or in Home Assistant, limits the frame to one album.
+- Different night hours on Friday and Saturday nights.
+- Three square photos are grouped in one mat, like two portraits.
+- "On this day" uses Immich's own memories in a single request when no album or people filter
+  is set and the API key has `memory.read`.
+- The choice of photos was moved into a module of its own and is now tested against a fake
+  Immich that counts requests.
+
 ## 2026.11.2
 
 - Birthdays: on someone's birthday the frame shows more of their photos, and the caption can

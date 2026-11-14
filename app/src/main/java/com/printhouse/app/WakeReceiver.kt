@@ -6,7 +6,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
-import java.util.Calendar
 
 /**
  * Rallume l'écran et remet le cadre au premier plan : à la fin de la nuit (alarme), au démarrage
@@ -17,6 +16,11 @@ class WakeReceiver : BroadcastReceiver() {
         // En pleine nuit, ou quand la pièce est vide : on lance le cadre sans allumer l'écran
         // (le capteur de présence le rallumera à l'arrivée de quelqu'un).
         val app = ctx.applicationContext as App
+        when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED -> app.events.add(tr("Démarrage de la tablette"))
+            Intent.ACTION_MY_PACKAGE_REPLACED -> app.events.add(tr("Mise à jour installée"))
+            else -> app.events.add(tr("Fin de la nuit"))
+        }
         if (!app.settings.isNightNow() && !app.screenOff) wake(ctx)
         ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
@@ -39,13 +43,8 @@ class WakeReceiver : BroadcastReceiver() {
                 ctx, 0, Intent(ctx, WakeReceiver::class.java).setAction(ACTION_MORNING),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            val end = if (settings.night) Settings.minutes(settings.nightTo) else null
-            if (end == null) { alarms.cancel(pi); return }
-            val at = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, end / 60); set(Calendar.MINUTE, end % 60)
-                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
-            }.timeInMillis
+            val at = settings.nextNightEnd()
+            if (at == null) { alarms.cancel(pi); return }
             try {
                 alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
             } catch (_: SecurityException) {

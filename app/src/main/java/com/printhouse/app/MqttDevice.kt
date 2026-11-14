@@ -31,6 +31,7 @@ class MqttDevice(private val app: App) : MqttClient.Listener {
     @Volatile private var lastImage: ByteArray? = null
 
     override fun onMqttConnected() {
+        failures = 0
         fun JSONObject.state(key: String) = put("state_topic", "$base/$key")
         fun JSONObject.command(key: String) = put("command_topic", "$base/$key/set")
         entity("switch", "screen", tr("Écran"), "mdi:image-frame") { state("screen").command("screen") }
@@ -45,6 +46,7 @@ class MqttDevice(private val app: App) : MqttClient.Listener {
                 state(key).command(key).put("min", 1).put("max", 100).put("step", 1).put("unit_of_measurement", "%").put("mode", "slider")
             }
         }
+        entity("switch", "guest", tr("Mode invités"), "mdi:account-group") { state("guest").command("guest") }
         entity("select", "source", tr("Source des photos"), "mdi:image-multiple") { state("source").command("source").put("options", JSONArray(sources.map { it.second })) }
         entity("select", "memories", tr("Ce jour-là"), "mdi:calendar-heart") { state("memories").command("memories").put("options", JSONArray(shares.map { it.second })) }
         client.publish("$base/status", "online", retain = true)
@@ -53,7 +55,13 @@ class MqttDevice(private val app: App) : MqttClient.Listener {
         lastImage?.let { client.publish("$base/picture", it, retain = true) }
     }
 
-    override fun onMqttDisconnected(error: String?) {}
+    private var failures = 0
+
+    override fun onMqttDisconnected(error: String?) {
+        // Un premier échec isolé est banal (le broker ferme l'ancienne session au redémarrage) :
+        // on ne note que les échecs qui se répètent.
+        if (error != null && ++failures == 2) app.events.add("MQTT : $error")
+    }
 
     override fun onMqttMessage(topic: String, payload: String) {
         val value = payload.trim()
@@ -63,6 +71,7 @@ class MqttDevice(private val app: App) : MqttClient.Listener {
             "previous" -> app.step(-1)
             "brightness_day" -> value.toFloatOrNull()?.let { s.dayBrightness = it.toInt().coerceIn(1, 100); app.settingsChanged(null) }
             "brightness_evening" -> value.toFloatOrNull()?.let { s.eveningBrightness = it.toInt().coerceIn(1, 100); app.settingsChanged(null) }
+            "guest" -> { s.guestMode = value.equals("ON", ignoreCase = true); app.settingsChanged(1) }
             "source" -> sources.firstOrNull { it.second == value }?.let { s.sourceMode = it.first; app.settingsChanged(1) }
             "memories" -> shares.firstOrNull { it.second == value }?.let { s.memoryShare = it.first }
         }
@@ -74,6 +83,7 @@ class MqttDevice(private val app: App) : MqttClient.Listener {
         client.publish("$base/photo", app.shownCaption.ifEmpty { "—" }.take(250), retain = true)
         if (app.battery >= 0) client.publish("$base/battery", app.battery.toString(), retain = true)
         client.publish("$base/charging", if (app.charging) "ON" else "OFF", retain = true)
+        client.publish("$base/guest", if (s.guestMode) "ON" else "OFF", retain = true)
         client.publish("$base/brightness_day", s.dayBrightness.toString(), retain = true)
         client.publish("$base/brightness_evening", s.eveningBrightness.toString(), retain = true)
         client.publish("$base/source", (sources.firstOrNull { it.first == s.sourceMode } ?: sources[0]).second, retain = true)

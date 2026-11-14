@@ -22,7 +22,8 @@ page served by the tablet itself.
   of the photo in the caption, from the birth dates in Immich.
 - **Season** — photos from the same time of year, and no photo shown twice within a week.
 - **Series** — now and then, a photo is followed by a few more from the same day.
-- **Two portraits side by side** in the same mat.
+- **Two portraits side by side**, or three square photos, in the same mat.
+- **Guest mode** — one switch limits the frame to an album of your choice.
 - **Not-a-photo filters** — skips screenshots, tiny images and, optionally, images with no camera.
 - **Offline reserve** — the last 80 photos stay on the tablet and keep the frame going when
   Immich is unreachable.
@@ -30,6 +31,8 @@ page served by the tablet itself.
   automatic wake-up, starts at boot, can be the tablet's home app.
 - **Home Assistant** — reads a presence sensor to turn the screen off when the room is empty,
   and can appear as an MQTT device with a screen switch, photo buttons and the current photo.
+  A touch, or optionally the tablet's front camera, turns the frame back on at once.
+- **Log** — the settings page tells you when and why the frame went dark, and what went wrong.
 - **Web settings page** — every setting, in French or English, with a live preview of the
   frame, an optional PIN, backup and restore, and updates by APK upload or from a GitHub
   repository.

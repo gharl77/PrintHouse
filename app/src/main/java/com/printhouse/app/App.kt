@@ -25,6 +25,9 @@ class App : Application() {
         private set
     lateinit var updater: Updater
         private set
+    lateinit var events: EventLog
+        private set
+    private var motion: MotionWake? = null
 
     /** Le cadre à l'écran, s'il existe. */
     var frame: MainActivity? = null
@@ -62,6 +65,8 @@ class App : Application() {
         instance = this
         settings = Settings(this)
         I18n.init(settings)
+        events = EventLog(this)
+        events.add(tr("PrintHouse %s démarré").format(version))
         library = Library(this, settings)
         updater = Updater(this)
         web = WebServer(this).also { it.start() }
@@ -99,6 +104,7 @@ class App : Application() {
         Thread.setDefaultUncaughtExceptionHandler { _, e ->
             try {
                 android.util.Log.e("PrintHouse", "Erreur fatale, relance", e)
+                events.add(tr("Erreur fatale, relance de l'app") + " : " + e.toString().take(200))
                 scheduleRestart()
             } finally {
                 android.os.Process.killProcess(android.os.Process.myPid())
@@ -122,6 +128,36 @@ class App : Application() {
     fun settingsChanged(step: Int?) {
         frame?.onSettingsChanged(step)
         mqtt.publishState()
+        updateMotion()
+    }
+
+    /** Pourquoi le cadre est noir, en clair (null s'il ne l'est pas). */
+    fun darkReason(): String? = when {
+        settings.isNightNow() && System.currentTimeMillis() > nightPeekUntil -> tr("nuit")
+        presenceOff -> tr("pièce vide")
+        manualOff -> tr("interrupteur Écran")
+        else -> null
+    }
+
+    /**
+     * La caméra frontale guette un mouvement seulement quand le cadre est éteint parce que la
+     * pièce est vide (jamais la nuit, jamais quand il est allumé), si le réglage est activé et
+     * que l'accès à la caméra a été accordé sur la tablette.
+     */
+    fun updateMotion() {
+        val want = settings.motionWake && presenceOff && !settings.isNightNow() &&
+            MotionWake.hasFrontCamera(this) && MotionWake.hasPermission(this)
+        if (want && motion == null) {
+            motion = MotionWake(this) {
+                if (presenceOff) {
+                    events.add(tr("Mouvement vu par la caméra : le cadre se rallume"))
+                    peek()
+                }
+            }.also { it.start() }
+        } else if (!want) {
+            motion?.stop()
+            motion = null
+        }
     }
 
     /** Photo suivante (+1) ou précédente (-1), demandée par la page web ou Home Assistant. */
@@ -154,6 +190,7 @@ class App : Application() {
 
     private fun applyScreen() {
         mqtt.publishState()
+        updateMotion()
         frame?.applyDisplay()
         if (!screenOff && !getSystemService(PowerManager::class.java).isInteractive && !settings.isNightNow()) {
             WakeReceiver.wake(this)
@@ -175,6 +212,7 @@ class App : Application() {
      * minutes ; sinon jusqu'à ce que le capteur constate de nouveau l'absence pendant le délai réglé.
      */
     fun peek() {
+        if (darkReason() != null && motion == null) events.add(tr("Toucher : le cadre se rallume"))
         if (settings.isNightNow()) nightPeekUntil = System.currentTimeMillis() + NIGHT_PEEK_MS
         manualOff = false
         presenceOff = false

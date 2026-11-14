@@ -147,7 +147,8 @@ class MainActivity : Activity() {
     /** La photo sous le doigt (pour une paire : gauche ou droite). */
     private fun photoAt(x: Float): Immich.Photo? {
         val current = app.library.current
-        return if (current.size == 2 && x > view.width / 2f) current[1] else current.firstOrNull()
+        if (current.isEmpty() || view.width == 0) return null
+        return current[(x * current.size / view.width).toInt().coerceIn(0, current.size - 1)]
     }
 
     /** Balayage vers le haut : la photo devient favorite dans Immich. */
@@ -173,7 +174,7 @@ class MainActivity : Activity() {
         side.execute {
             try {
                 val lines = Immich.details(server, photo.id)
-                main.post { view.showDetails(lines, onRight = app.library.current.size == 2 && x > view.width / 2f) }
+                main.post { view.showDetails(lines, onRight = app.library.current.size > 1 && x > view.width / 2f) }
             } catch (e: ImmichException) {
                 main.post { view.flash(e.message ?: tr("Immich injoignable.")) }
             }
@@ -224,6 +225,7 @@ class MainActivity : Activity() {
         view.setNight(dark)
         // Le cadre se rallume (matin, retour de quelqu'un) : une nouvelle photo l'accueille.
         if (wasDark && !dark) { show(1); scheduleTick() }
+        if (wasDark != dark) app.events.add(if (dark) tr("Écran éteint") + " : " + (app.darkReason() ?: "") else tr("Écran rallumé"))
         wasDark = dark
         val lp = window.attributes
         val wanted = if (dark) 0.01f else settings.brightnessNow() ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
@@ -238,8 +240,20 @@ class MainActivity : Activity() {
         if (!dark && !getSystemService(PowerManager::class.java).isInteractive) WakeReceiver.wake(this)
     }
 
+    /** Réponse à la demande d'accès à la caméra (réveil par mouvement). */
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        app.events.add(tr(if (MotionWake.hasPermission(this)) "Accès à la caméra accordé" else "Accès à la caméra refusé"))
+        app.updateMotion()
+        hideSystemBars()
+    }
+
     /** Un réglage a changé sur la page web ([step] : voir [App.settingsChanged]). */
     fun onSettingsChanged(step: Int?) {
+        // Le réveil par mouvement vient d'être activé : Android demande l'accord sur la tablette.
+        if (settings.motionWake && MotionWake.hasFrontCamera(this) && !MotionWake.hasPermission(this)) {
+            requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 1)
+        }
         applyDisplay()
         if (step != null) show(step, quick = true)
         scheduleTick()
@@ -303,6 +317,7 @@ class MainActivity : Activity() {
         val margin = settings.marginVmin
         val strength = settings.printStrength.coerceIn(0, 100) / 100f
         io.execute {
+            val started = System.currentTimeMillis()
             try {
                 val page = app.library.page(step)
                 if (page == null) { // déjà à la première photo vue
@@ -321,6 +336,9 @@ class MainActivity : Activity() {
                     small.compress(Bitmap.CompressFormat.JPEG, 82, out)
                     small.recycle()
                 }.toByteArray()
+                val took = (System.currentTimeMillis() - started) / 1000
+                if (took >= SLOW_SECONDS) app.events.add(tr("Photo lente à arriver : %d s").format(took))
+                if (page.offline) app.events.add(tr("Immich injoignable : photos de la réserve"))
                 main.post {
                     view.show(frame, r, if (quick) FrameView.QUICK_FADE_MS else FrameView.FADE_MS) { done() }
                     app.photoShown(label, jpeg)
@@ -328,6 +346,7 @@ class MainActivity : Activity() {
                 }
             } catch (e: Throwable) {
                 val msg = (e as? ImmichException)?.message ?: (tr("Erreur") + " : ${e.message ?: e.javaClass.simpleName}")
+                app.events.add(msg)
                 main.post {
                     view.showNotice(msg)
                     busy = false
@@ -335,5 +354,9 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    private companion object {
+        const val SLOW_SECONDS = 3
     }
 }

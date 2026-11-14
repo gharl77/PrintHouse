@@ -20,6 +20,21 @@ object Logic {
         return value.coerceIn(0.01f, 1f)
     }
 
+    /**
+     * Est-ce la nuit à la minute [minute] du jour [day] (1 = lundi … 7 = dimanche) ? Les heures
+     * [week] (début, fin) valent pour toutes les nuits ; [weekend], s'il est donné, pour celles qui
+     * commencent le vendredi et le samedi. Une nuit peut enjamber minuit.
+     */
+    fun isNight(minute: Int, day: Int, week: Pair<Int, Int>, weekend: Pair<Int, Int>?): Boolean {
+        fun hours(d: Int) = if (weekend != null && (d == 5 || d == 6)) weekend else week
+        // La nuit commencée aujourd'hui…
+        val (from, to) = hours(day)
+        if (if (from <= to) minute in from until to else minute >= from) return true
+        // … ou celle commencée hier soir et qui dure encore ce matin.
+        val (yFrom, yTo) = hours(if (day == 1) 7 else day - 1)
+        return yFrom > yTo && minute < yTo
+    }
+
     /** Délai entre deux lectures du capteur de présence, en millisecondes. */
     fun presencePollMs(night: Boolean, screenOff: Boolean): Long = when {
         night -> 30_000L      // la nuit, l'écran reste éteint quoi qu'il arrive : rien ne presse

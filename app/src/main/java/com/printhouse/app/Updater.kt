@@ -56,6 +56,7 @@ class Updater(private val app: App) {
                     latestUrl = (0 until (assets?.length() ?: 0)).map { assets!!.getJSONObject(it).optString("browser_download_url") }
                         .firstOrNull { it.endsWith(".apk") }
                     status = if (available) tr("Une nouvelle version est disponible.") else tr("PrintHouse est à jour.")
+                    if (available) app.events.add(tr("Nouvelle version disponible : %s").format(latest))
                     null
                 }
                 404 -> { latest = ""; status = tr("Aucune version publiée dans ce dépôt."); status }

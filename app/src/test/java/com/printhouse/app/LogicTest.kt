@@ -77,6 +77,39 @@ class LogicTest {
         assertEquals(setOf("a" to "p1"), Logic.memoryCombos(listOf("a"), listOf("p1"), 2).toSet())
     }
 
+    private val week = (22 * 60) to (6 * 60)        // 22:00 → 06:00
+    private val weekend = (23 * 60 + 30) to (8 * 60) // 23:30 → 08:00
+    private fun night(day: Int, hhmm: String, we: Pair<Int, Int>? = weekend) = Logic.isNight(Logic.minutes(hhmm)!!, day, week, we)
+
+    @Test fun `a week night spans midnight`() {
+        assertTrue(night(2, "22:30"))
+        assertTrue(night(3, "05:59"))
+        assertFalse(night(3, "06:00"))
+        assertFalse(night(3, "21:59"))
+    }
+
+    @Test fun `Friday and Saturday nights use the weekend hours, until the next morning`() {
+        assertFalse("vendredi 22:30 : pas encore la nuit", night(5, "22:30"))
+        assertTrue(night(5, "23:45"))
+        assertTrue("samedi 07:30 : la nuit de vendredi dure encore", night(6, "07:30"))
+        assertFalse(night(6, "08:00"))
+        assertTrue("dimanche 07:30 : la nuit de samedi", night(7, "07:30"))
+        assertTrue("dimanche soir : heures de semaine", night(7, "22:30"))
+        assertFalse("lundi 07:00 : la nuit de dimanche a fini à 06:00", night(1, "07:00"))
+    }
+
+    @Test fun `without weekend hours every night is the same`() {
+        assertTrue(night(5, "22:30", null))
+        assertFalse(night(6, "07:30", null))
+    }
+
+    @Test fun `a night that does not span midnight`() {
+        val nap = (13 * 60) to (15 * 60)
+        assertTrue(Logic.isNight(14 * 60, 3, nap, null))
+        assertFalse(Logic.isNight(15 * 60, 3, nap, null))
+        assertFalse(Logic.isNight(60, 3, nap, null))
+    }
+
     @Test fun `versions compare number by number`() {
         assertTrue(Logic.compareVersions("2026.11.2", "2026.11.1") > 0)
         assertTrue(Logic.compareVersions("2026.11.10", "2026.11.9") > 0)
