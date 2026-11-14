@@ -79,8 +79,7 @@ class HaLink(private val app: App) {
                 absentMinutes = 0
                 if (app.presenceOff) main.post { if (my == gen) app.setPresenceScreen(true) }
             }
-            // Écran éteint : on regarde plus souvent, pour se rallumer vite à l'arrivée de quelqu'un.
-            try { Thread.sleep(if (app.screenOff) 2000L else 5000L) } catch (_: InterruptedException) { return }
+            try { Thread.sleep(Logic.presencePollMs(s.isNightNow(), app.screenOff)) } catch (_: InterruptedException) { return }
         }
     }
 

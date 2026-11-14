@@ -335,5 +335,6 @@ internal object I18nEn {
         "1 an" to "1 year old",
         "%d mois" to "%d months",
         "nouveau-né" to "newborn",
+        "Un instant…" to "One moment…",
     )
 }

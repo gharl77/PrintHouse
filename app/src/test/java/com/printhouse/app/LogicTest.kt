@@ -61,6 +61,22 @@ class LogicTest {
         assertTrue(Logic.isBirthday("2012-02-29", 2, 29, leapYear = true))
     }
 
+    @Test fun `the presence sensor is read slowly at night and quickly when the screen is off by day`() {
+        assertEquals(30_000L, Logic.presencePollMs(night = true, screenOff = true))
+        assertEquals(30_000L, Logic.presencePollMs(night = true, screenOff = false))
+        assertEquals(2_000L, Logic.presencePollMs(night = false, screenOff = true))
+        assertEquals(5_000L, Logic.presencePollMs(night = false, screenOff = false))
+    }
+
+    @Test fun `the search for memories stays small whatever the filters`() {
+        val people = (1..10).map { "p$it" }
+        assertEquals(listOf<Pair<String?, String?>>(null to null), Logic.memoryCombos(emptyList(), emptyList(), 2))
+        assertEquals(2, Logic.memoryCombos(emptyList(), people, 2).size)
+        assertEquals(2, Logic.memoryCombos(listOf("a", "b", "c"), people, 2).size)
+        assertTrue(Logic.memoryCombos(listOf("a"), people, 2).all { it.first == "a" && it.second in people })
+        assertEquals(setOf("a" to "p1"), Logic.memoryCombos(listOf("a"), listOf("p1"), 2).toSet())
+    }
+
     @Test fun `versions compare number by number`() {
         assertTrue(Logic.compareVersions("2026.11.2", "2026.11.1") > 0)
         assertTrue(Logic.compareVersions("2026.11.10", "2026.11.9") > 0)

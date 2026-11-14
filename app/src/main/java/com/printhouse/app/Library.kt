@@ -31,6 +31,8 @@ class Library(ctx: Context, private val settings: Settings) {
     private var birthdayPeople: List<Immich.Person> = emptyList() // dont c'est l'anniversaire aujourd'hui
     private var birthdayDay = ""
     private var birthdayTriedAt = 0L
+    private var birthdayEmptyUntil = 0L // Immich n'a rien renvoyé : on ne redemande pas tout de suite
+    private var seasonEmptyUntil = 0L
     private val seenFile = File(ctx.filesDir, "seen.json")
     private val seen: MutableMap<String, Long> = loadSeen() // photo → jour (depuis 1970) du dernier affichage
 
@@ -49,7 +51,9 @@ class Library(ctx: Context, private val settings: Settings) {
 
     /** Prénoms des personnes dont c'est l'anniversaire aujourd'hui. */
     val birthdaysToday get() = birthdayPeople.map { it.name }
-    private var memories: List<Immich.Photo> = emptyList()
+    @Volatile private var memories: List<Immich.Photo> = emptyList()
+    @Volatile private var memoriesLoading = false
+    private val background = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "memories").apply { isDaemon = true } }
     private var memoryIndex = 0
     private var memoriesDay = ""
     private var memoriesTriedAt = 0L
@@ -140,6 +144,7 @@ class Library(ctx: Context, private val settings: Settings) {
             queue.clear(); series.clear(); season.clear(); birthdayQueue.clear(); birthdayDay = ""
             synchronized(history) { history.clear() }
             pos = -1; memoriesDay = ""; signature = sig
+            birthdayEmptyUntil = 0L; seasonEmptyUntil = 0L
         }
         synchronized(history) { history.removeAll { page -> page.any { it.id in hidden } } }
         pos = pos.coerceAtMost(history.size - 1)
@@ -181,7 +186,8 @@ class Library(ctx: Context, private val settings: Settings) {
         val bmp = load(server, first)
         if (settings.pairPortraits && bmp.width < bmp.height * 0.85f) {
             // Photo verticale : on lui cherche une compagne verticale dans la file.
-            if (queue.none { it.portrait == true }) try { refill(server) } catch (_: ImmichException) {}
+            // (Sans laisser la file grossir quand Immich ne dit pas quelles photos sont verticales.)
+            if (queue.none { it.portrait == true } && queue.size < 2 * BATCH) try { refill(server) } catch (_: ImmichException) {}
             val partner = queue.firstOrNull { it.portrait == true && acceptable(it) && it.id != first.id }
             if (partner != null) {
                 queue.remove(partner)
@@ -200,21 +206,31 @@ class Library(ctx: Context, private val settings: Settings) {
         }
         ensureMemories(server)
         ensureBirthdays(server)
-        // Deux passes : d'abord sans les photos vues récemment, puis en les acceptant s'il ne reste rien.
+        // Deux passes : d'abord sans les photos vues récemment, puis en les acceptant s'il ne reste
+        // rien. Chaque passe a un nombre limité d'appels à Immich : avec des filtres serrés (peu de
+        // photos, toutes déjà vues), il ne faut pas enchaîner des dizaines de requêtes pour une photo.
         for (allowSeen in listOf(false, true)) {
-            repeat(if (allowSeen) 60 else 90) {
+            var refills = 0
+            for (attempt in 0 until ATTEMPTS) {
+                val now = System.currentTimeMillis()
                 val roll = rnd.nextInt(100)
                 val p: Immich.Photo? = when {
                     birthdayPeople.isNotEmpty() && roll < settings.birthdayShare -> {
-                        if (birthdayQueue.isEmpty()) refillBirthday(server)
+                        if (birthdayQueue.isEmpty() && now > birthdayEmptyUntil) {
+                            refillBirthday(server)
+                            if (birthdayQueue.isEmpty()) birthdayEmptyUntil = now + RETRY_EMPTY_MS
+                        }
                         birthdayQueue.pollFirst()?.also { stats.birthdays++ }
                     }
                     memories.isNotEmpty() && rnd.nextInt(100) < settings.memoryShare -> {
-                        if (memoryIndex >= memories.size) { memories = memories.shuffled(rnd); memoryIndex = 0 }
-                        memories[memoryIndex++].also { stats.memories++ }
+                        val list = memories // copie locale : la liste peut être remplacée en arrière-plan
+                        if (list.isEmpty()) null else list[memoryIndex++ % list.size].also { stats.memories++ }
                     }
                     rnd.nextInt(100) < settings.seasonShare -> {
-                        if (season.isEmpty()) refillSeason(server)
+                        if (season.isEmpty() && now > seasonEmptyUntil) {
+                            refillSeason(server)
+                            if (season.isEmpty()) seasonEmptyUntil = now + RETRY_EMPTY_MS
+                        }
                         season.pollFirst()?.also { stats.season++ }
                     }
                     else -> null
@@ -222,7 +238,10 @@ class Library(ctx: Context, private val settings: Settings) {
                 if (p != null) {
                     if (acceptable(p, allowSeen)) return p
                 } else {
-                    if (queue.isEmpty()) refill(server)
+                    if (queue.isEmpty()) {
+                        if (refills++ >= MAX_REFILLS) break // assez cherché : passe suivante
+                        refill(server)
+                    }
                     val q = queue.pollFirst() ?: throw ImmichException("Immich n'a renvoyé aucune photo pour ces critères.")
                     if (acceptable(q, allowSeen)) { startSeries(server, q); return q }
                 }
@@ -328,27 +347,37 @@ class Library(ctx: Context, private val settings: Settings) {
         )
     }
 
-    /** Souvenirs du jour : cherchés une fois par jour (nouvel essai après une heure en cas d'échec). */
+    /**
+     * Souvenirs du jour : cherchés une fois par jour, en arrière-plan. La recherche demande une
+     * requête par année et par filtre (des dizaines en tout) : elle ne doit jamais retenir
+     * l'affichage de la photo suivante. En attendant, le cadre montre des photos ordinaires.
+     */
     private fun ensureMemories(server: Immich.Server) {
         if (settings.memoryShare <= 0) { memories = emptyList(); return }
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val now = System.currentTimeMillis()
+        if (memoriesLoading) return
         if (today == memoriesDay && (memories.isNotEmpty() || now - memoriesTriedAt < 3_600_000L)) return
+        if (today != memoriesDay) memories = emptyList() // ceux d'hier ne sont plus « ce jour-là »
         memoriesDay = today
         memoriesTriedAt = now
-        memoryIndex = 0
-        val maxYears = settings.sinceYears.let { if (it > 0) it else 30 }
-        val albums = if (settings.sourceMode == "albums") settings.albums else emptyList()
-        val persons = settings.persons
-        memories = try {
-            // Mêmes filtres que le reste : chaque album et chaque personne choisis sont parcourus.
-            val base = Immich.Filter(favorites = settings.sourceMode == "favorites")
-            val combos = (if (albums.isEmpty()) listOf<String?>(null) else albums.map { it.id }).flatMap { a ->
-                (if (persons.isEmpty()) listOf<String?>(null) else persons.map { it.id }).map { p -> base.copy(albumId = a, personId = p) }
-            }.take(6)
-            combos.flatMap { Immich.onThisDay(server, it, maxYears) }.distinctBy { it.id }.shuffled(rnd)
-        } catch (_: ImmichException) {
-            emptyList()
+        memoriesLoading = true
+        val forSignature = signature
+        val maxYears = settings.sinceYears.let { if (it > 0) it else MEMORY_YEARS }
+        val base = Immich.Filter(favorites = settings.sourceMode == "favorites")
+        val combos = Logic.memoryCombos(
+            if (settings.sourceMode == "albums") settings.albums.map { it.id } else emptyList(),
+            settings.persons.map { it.id }, MEMORY_COMBOS,
+        )
+        background.execute {
+            val found = try {
+                combos.flatMap { (album, person) -> Immich.onThisDay(server, base.copy(albumId = album, personId = person), maxYears) }
+                    .distinctBy { it.id }.shuffled(rnd)
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (forSignature == signature) memories = found
+            memoriesLoading = false
         }
     }
 
@@ -399,6 +428,11 @@ class Library(ctx: Context, private val settings: Settings) {
 
     companion object {
         private const val BATCH = 12
+        private const val ATTEMPTS = 90           // photos examinées par passe, au plus
+        private const val MAX_REFILLS = 5         // appels à Immich par passe, au plus
+        private const val RETRY_EMPTY_MS = 600_000L
+        private const val MEMORY_YEARS = 25   // années remontées pour « Ce jour-là »
+        private const val MEMORY_COMBOS = 2   // filtres (album, personne) parcourus : 2 × 25 requêtes au plus
         private const val SEASON_DAYS = 21   // de part et d'autre de la date du jour
         private const val SEEN_MAX = 6000
         private const val SMALL = 1000      // plus grand côté, en pixels

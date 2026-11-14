@@ -80,6 +80,10 @@ mat. A small caption under the photo gives the place and the month.
 
 With two photos on screen, the gesture applies to the photo under your finger.
 
+When the frame is black — at night, or because the room was reported empty — the first touch
+only turns it back on: for two minutes at night, otherwise until the presence sensor reports
+the room empty again for the chosen delay.
+
 ![Photo details: date, place, people, album, camera and file name](screenshots/frame-details.jpg)
 
 A photo set aside is only hidden on this tablet; nothing changes in Immich. You can put it back
@@ -206,7 +210,8 @@ PrintHouse links to Home Assistant in two independent ways.
 3. Pick a presence sensor and a delay, and turn on **Follow a presence sensor**.
 
 The screen turns off once the sensor has been `off` (or `not_home`) for the chosen delay and
-comes back within a few seconds when it returns to `on`. Binary sensors, people, device
+comes back within a few seconds, with a new photo, when it returns to `on`. A sensor can take a
+moment to notice you; touching the frame turns it on at once. Binary sensors, people, device
 trackers, input booleans and groups are offered. A true presence sensor works better than a
 motion sensor, which goes `off` as soon as you sit still. If Home Assistant does not answer,
 the screen stays on. Night keeps priority. PrintHouse only reads this one sensor; it writes
@@ -317,6 +322,7 @@ time you must allow PrintHouse to install apps. After an update the frame restar
 | A message saying Immich is unreachable | Wrong address, Immich is down, or the tablet is off the network. The frame keeps showing the photos it has stored |
 | MQTT: "not authorised" | The broker rejected the user or password. With the Mosquitto add-on, use the login name of a Home Assistant user |
 | The screen turns off while you are in the room | The sensor is a motion sensor. Use a presence sensor or a longer delay |
+| The frame is black when you walk in | The presence sensor has not noticed you yet. Touch the frame, or wait a few seconds |
 | The same few photos keep coming back | The filters (albums, people, period, not-a-photo) leave few photos to choose from |
 | The update asks to "allow from this source" | Normal the first time: allow it on the tablet, then send the file again |
 | The settings page does not open | PrintHouse must be running; check the address in the tablet's settings screen. The address can change if your router does not reserve it |

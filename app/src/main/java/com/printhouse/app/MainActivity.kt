@@ -88,7 +88,13 @@ class MainActivity : Activity() {
             }
             override fun onLongPress(e: MotionEvent) = openSettings()
         })
-        view.setOnTouchListener { _, e -> gestures.onTouchEvent(e) }
+        view.setOnTouchListener { _, e ->
+            if (app.dark) {
+                // Cadre noir (nuit, pièce vide) : le premier toucher le rallume, sans changer de photo.
+                if (e.actionMasked == MotionEvent.ACTION_DOWN) app.peek()
+                true
+            } else gestures.onTouchEvent(e)
+        }
 
         if (savedInstanceState == null && !settings.configured) openSettings()
     }
@@ -205,7 +211,8 @@ class MainActivity : Activity() {
     }
 
     /** Écran éteint : la nuit, ou quand Home Assistant dit que la pièce est vide. */
-    private fun dark() = settings.isNightNow() || app.screenOff
+    private fun dark() = app.dark
+    private var wasDark = false
 
     /**
      * Le jour, l'écran reste allumé, à la luminosité voulue pour l'heure. Éteint (nuit ou pièce
@@ -215,6 +222,9 @@ class MainActivity : Activity() {
     fun applyDisplay() {
         val dark = dark()
         view.setNight(dark)
+        // Le cadre se rallume (matin, retour de quelqu'un) : une nouvelle photo l'accueille.
+        if (wasDark && !dark) { show(1); scheduleTick() }
+        wasDark = dark
         val lp = window.attributes
         val wanted = if (dark) 0.01f else settings.brightnessNow() ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         if (abs(lp.screenBrightness - wanted) > 0.004f) {
@@ -239,7 +249,12 @@ class MainActivity : Activity() {
     fun userStep(step: Int) {
         show(step, quick = true)
         scheduleTick()
+        // Si la photo tarde (réseau lent), un mot discret montre que le geste a été compris.
+        main.removeCallbacks(waitNotice)
+        main.postDelayed(waitNotice, 1800)
     }
+
+    private val waitNotice = Runnable { if (busy && view.hasPhoto) view.flash(tr("Un instant…")) }
 
     /** Double toucher : la photo sous le doigt est écartée et ne reviendra plus. */
     private fun hideAt(x: Float) {

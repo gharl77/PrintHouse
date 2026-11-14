@@ -2,6 +2,23 @@
 
 Versions are numbered year.month.number.
 
+## 2026.11.3
+
+Fixes for a frame that looked frozen in the morning.
+
+- The search for "On this day" memories no longer holds up the next photo. It ran dozens of
+  requests before the first photo of the day (up to 180 with several people chosen), leaving the
+  frame unresponsive for about half a minute; it now runs in the background and is capped at 50.
+- Touching a black frame turns it back on: until the presence sensor reports the room empty
+  again, or for two minutes at night. Before, a frame switched off by the presence sensor stayed
+  black, at minimum brightness, until the sensor noticed you.
+- When the frame turns back on (morning, someone coming in) it comes to the front, even if
+  another window had taken its place, and greets you with a new photo.
+- The morning wake-up no longer lights the screen in an empty room.
+- The presence sensor is read every 30 seconds at night instead of every 2.
+- At most a handful of requests are made to Immich for one photo, however tight the filters.
+- A short "One moment…" appears when a photo takes more than two seconds to arrive.
+
 ## 2026.11.2
 
 - Birthdays: on someone's birthday the frame shows more of their photos, and the caption can

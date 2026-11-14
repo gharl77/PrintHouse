@@ -14,8 +14,10 @@ import java.util.Calendar
  */
 class WakeReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        // Démarrage en pleine nuit : on lance le cadre sans allumer l'écran.
-        if (!Settings(ctx).isNightNow()) wake(ctx)
+        // En pleine nuit, ou quand la pièce est vide : on lance le cadre sans allumer l'écran
+        // (le capteur de présence le rallumera à l'arrivée de quelqu'un).
+        val app = ctx.applicationContext as App
+        if (!app.settings.isNightNow() && !app.screenOff) wake(ctx)
         ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 

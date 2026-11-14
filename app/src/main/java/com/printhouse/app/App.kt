@@ -154,12 +154,32 @@ class App : Application() {
 
     private fun applyScreen() {
         mqtt.publishState()
-        val f = frame
-        f?.applyDisplay()
+        frame?.applyDisplay()
         if (!screenOff && !getSystemService(PowerManager::class.java).isInteractive && !settings.isNightNow()) {
             WakeReceiver.wake(this)
-            if (f == null) startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            // Toujours ramener le cadre devant : si une autre fenêtre (branchement USB, écran
+            // d'accueil) est passée au premier plan, l'écran se rendormirait sans le montrer.
+            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
+    }
+
+    /** La nuit, un toucher rallume le cadre jusqu'à cette heure (millisecondes). */
+    @Volatile var nightPeekUntil = 0L
+        private set
+
+    /** Le cadre doit-il être noir maintenant ? (Nuit, pièce vide ou interrupteur « Écran ».) */
+    val dark get() = (settings.isNightNow() && System.currentTimeMillis() > nightPeekUntil) || screenOff
+
+    /**
+     * Quelqu'un touche le cadre alors qu'il est noir : il est là, on rallume. La nuit, pour deux
+     * minutes ; sinon jusqu'à ce que le capteur constate de nouveau l'absence pendant le délai réglé.
+     */
+    fun peek() {
+        if (settings.isNightNow()) nightPeekUntil = System.currentTimeMillis() + NIGHT_PEEK_MS
+        manualOff = false
+        presenceOff = false
+        ha.resetAbsence()
+        applyScreen()
     }
 
     /** À appeler quand le lien Home Assistant ou MQTT change. */
@@ -185,6 +205,7 @@ class App : Application() {
     }
 
     companion object {
+        private const val NIGHT_PEEK_MS = 120_000L
         lateinit var instance: App
             private set
     }

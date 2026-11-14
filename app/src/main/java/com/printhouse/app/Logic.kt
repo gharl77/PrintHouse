@@ -20,6 +20,23 @@ object Logic {
         return value.coerceIn(0.01f, 1f)
     }
 
+    /** Délai entre deux lectures du capteur de présence, en millisecondes. */
+    fun presencePollMs(night: Boolean, screenOff: Boolean): Long = when {
+        night -> 30_000L      // la nuit, l'écran reste éteint quoi qu'il arrive : rien ne presse
+        screenOff -> 2_000L   // écran éteint le jour : se rallumer vite quand quelqu'un arrive
+        else -> 5_000L
+    }
+
+    /**
+     * Combinaisons (album, personne) à parcourir pour chercher les souvenirs du jour, limitées à
+     * [cap] : chaque combinaison coûte une requête par année. Une valeur null = pas de filtre.
+     */
+    fun memoryCombos(albums: List<String>, persons: List<String>, cap: Int): List<Pair<String?, String?>> {
+        val a: List<String?> = if (albums.isEmpty()) listOf(null) else albums
+        val p: List<String?> = if (persons.isEmpty()) listOf(null) else persons
+        return a.flatMap { album -> p.map { person -> album to person } }.shuffled().take(cap)
+    }
+
     private val DATE = Regex("""^(\d{4})-(\d{2})-(\d{2})""")
 
     /** Âge à la date [at] de quelqu'un né le [birth] (dates « AAAA-MM-JJ… ») : (années, mois), ou null. */
