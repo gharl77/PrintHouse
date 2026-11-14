@@ -68,8 +68,10 @@ troubleshooting.
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-Needs JDK 17 and the Android SDK (`sdk.dir` in `local.properties`). The release build is signed
-with the development key, which is enough to install on your own tablet over USB.
+Needs JDK 17 and the Android SDK (`sdk.dir` in `local.properties`). Built this way, the APK is
+signed with your development key, which is enough for your own tablet. The APKs published in
+the releases are signed with a distribution key: to move from one to the other, uninstall first
+(export your settings from the web page beforehand).
 
 ## License
 

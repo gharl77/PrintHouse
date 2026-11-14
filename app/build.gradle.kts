@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// Clé de distribution (keystore.properties, jamais versionnée). Utilisée seulement avec
+// « ./gradlew assembleRelease -Pdistribution » ; sinon la clé de développement signe l'APK.
+val keyProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val useDistributionKey = project.hasProperty("distribution") && keyProps.getProperty("storeFile") != null
 
 // Version : année.mois.numéro (ex. 2026.11.1). Le versionCode en découle : 2026.11.1 -> 202611001.
 val appVersion = "2026.11.1"
@@ -19,13 +29,23 @@ android {
         versionName = appVersion
     }
 
+    signingConfigs {
+        create("distribution") {
+            if (keyProps.getProperty("storeFile") != null) {
+                storeFile = rootProject.file(keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Clé de développement : suffit pour installer par USB sur sa propre tablette.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (useDistributionKey) "distribution" else "debug")
         }
     }
     compileOptions {
