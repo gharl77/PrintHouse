@@ -2,6 +2,20 @@
 
 Versions are numbered year.month.number.
 
+## 2026.11.2
+
+- Birthdays: on someone's birthday the frame shows more of their photos, and the caption can
+  give people's age at the time of the photo ("Emma, 3 years old"), from the birth dates in
+  Immich.
+- Season: photos from the same time of year in past years.
+- A photo is not shown again for a week (adjustable).
+- Paper look: a slider from the photo as it is in Immich to a very matte print.
+- Web page: live preview of the frame, the latest photos shown with Favourite and Set aside
+  buttons, and counters (memories, series, images skipped by the filters).
+- If the app crashes, it restarts by itself.
+- Home Assistant (MQTT): battery level and charging state of the tablet.
+- Unit tests, including a check that every text has its English translation.
+
 ## 2026.11.1
 
 First public version.

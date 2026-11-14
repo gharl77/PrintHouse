@@ -74,6 +74,14 @@ class Settings(ctx: Context) {
     var skipNoCamera by Flag("skipNoCamera", false)
     /** Chance (en %) qu'une photo soit suivie d'autres photos de la même journée. */
     var seriesShare by Num("seriesShare", 10)
+    /** Part (en %) des photos de la même saison : même période de l'année, les années passées. */
+    var seasonShare by Num("seasonShare", 0)
+    /** Ne pas remontrer une photo vue dans les N derniers jours (0 = sans importance). */
+    var repeatDays by Num("repeatDays", 7)
+    /** Le jour de l'anniversaire de quelqu'un, part (en %) de ses photos. */
+    var birthdayShare by Num("birthdayShare", 50)
+    /** Âge des personnes dans la légende : "never", "birthday" (le jour de leur anniversaire) ou "always". */
+    var ageCaption by Str("ageCaption", "always")
     /** Photos écartées d'un double toucher : elles ne reviennent plus. */
     var hidden: Set<String>
         get() = p.getStringSet("hidden", emptySet())!!.toSet()
@@ -84,6 +92,8 @@ class Settings(ctx: Context) {
     var matColor by Str("matColor", "black")
     /** "small", "medium" ou "large". */
     var marginSize by Str("marginSize", "medium")
+    /** Intensité du rendu « tirage papier », de 0 (photo d'origine) à 100 (tirage très mat). */
+    var printStrength by Num("printStrength", 100)
     val matDark get() = matColor != "cream"
     val marginVmin get() = when (marginSize) { "small" -> 3.5f; "large" -> 9f; else -> 5.5f }
 
@@ -200,31 +210,13 @@ class Settings(ctx: Context) {
         if (!autoBrightness) return null
         val m = minutes(morningFrom) ?: return null
         val e = minutes(eveningFrom) ?: return null
-        val day = dayBrightness.coerceIn(1, 100) / 100f
-        val eve = eveningBrightness.coerceIn(1, 100) / 100f
-        val now = nowMinutes()
-        fun since(start: Int) = Math.floorMod(now - start, 1440)
-        val sinceMorning = since(m)
-        val sinceEvening = since(e)
-        val value = if (sinceMorning < sinceEvening) { // dernier seuil franchi : le matin
-            if (sinceMorning < RAMP) eve + (day - eve) * sinceMorning / RAMP else day
-        } else {
-            if (sinceEvening < RAMP) day + (eve - day) * sinceEvening / RAMP else eve
-        }
-        return value.coerceIn(0.01f, 1f)
+        return Logic.brightness(nowMinutes(), m, e, dayBrightness.coerceIn(1, 100) / 100f, eveningBrightness.coerceIn(1, 100) / 100f)
     }
 
     companion object {
-        private const val RAMP = 30
         private val SECRETS = setOf("key", "pin", "haToken", "mqttPass")
 
-        /** "22:30" → 1350 ; null si l'heure est illisible. */
-        fun minutes(hhmm: String): Int? {
-            val m = Regex("""^\s*(\d{1,2})\s*[:hH]\s*(\d{0,2})\s*$""").find(hhmm) ?: return null
-            val h = m.groupValues[1].toInt()
-            val min = m.groupValues[2].toIntOrNull() ?: 0
-            return if (h in 0..23 && min in 0..59) h * 60 + min else null
-        }
+        fun minutes(hhmm: String): Int? = Logic.minutes(hhmm)
 
         fun cleanUrl(raw: String): String {
             var u = raw.trim().trimEnd('/').removeSuffix("/api")

@@ -37,6 +37,8 @@ class MqttDevice(private val app: App) : MqttClient.Listener {
         entity("button", "next", tr("Photo suivante"), "mdi:skip-next") { command("next") }
         entity("button", "previous", tr("Photo précédente"), "mdi:skip-previous") { command("previous") }
         entity("sensor", "photo", tr("Photo affichée"), "mdi:image-text") { state("photo") }
+        entity("sensor", "battery", tr("Batterie"), "mdi:battery") { state("battery").put("device_class", "battery").put("unit_of_measurement", "%").put("state_class", "measurement") }
+        entity("binary_sensor", "charging", tr("En charge"), "mdi:power-plug") { state("charging").put("device_class", "battery_charging") }
         entity("image", "picture", tr("Photo en cours"), "mdi:image") { put("image_topic", "$base/picture").put("content_type", "image/jpeg") }
         for ((key, name) in listOf("brightness_day" to tr("Luminosité de jour"), "brightness_evening" to tr("Luminosité du soir"))) {
             entity("number", key, name, "mdi:brightness-6") {
@@ -70,6 +72,8 @@ class MqttDevice(private val app: App) : MqttClient.Listener {
     fun publishState() {
         client.publish("$base/screen", if (app.screenOff) "OFF" else "ON", retain = true)
         client.publish("$base/photo", app.shownCaption.ifEmpty { "—" }.take(250), retain = true)
+        if (app.battery >= 0) client.publish("$base/battery", app.battery.toString(), retain = true)
+        client.publish("$base/charging", if (app.charging) "ON" else "OFF", retain = true)
         client.publish("$base/brightness_day", s.dayBrightness.toString(), retain = true)
         client.publish("$base/brightness_evening", s.eveningBrightness.toString(), retain = true)
         client.publish("$base/source", (sources.firstOrNull { it.first == s.sourceMode } ?: sources[0]).second, retain = true)

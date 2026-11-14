@@ -14,9 +14,13 @@ page served by the tablet itself.
 ## What it does
 
 - **Print look** — a black or cream mat with a bevelled window, lifted blacks, paper-white
-  highlights, slightly held-back colours and paper grain. Photos are never cropped.
+  highlights, slightly held-back colours and paper grain, as strong as you like. Photos are
+  never cropped.
 - **Sources** — whole library, favourites or chosen albums; filter by people and by period.
 - **On this day** — mixes in photos taken on today's date in past years.
+- **Birthdays and ages** — more photos of someone on their birthday, and their age at the time
+  of the photo in the caption, from the birth dates in Immich.
+- **Season** — photos from the same time of year, and no photo shown twice within a week.
 - **Series** — now and then, a photo is followed by a few more from the same day.
 - **Two portraits side by side** in the same mat.
 - **Not-a-photo filters** — skips screenshots, tiny images and, optionally, images with no camera.
@@ -26,8 +30,9 @@ page served by the tablet itself.
   automatic wake-up, starts at boot, can be the tablet's home app.
 - **Home Assistant** — reads a presence sensor to turn the screen off when the room is empty,
   and can appear as an MQTT device with a screen switch, photo buttons and the current photo.
-- **Web settings page** — every setting, in French or English, with an optional PIN, backup and
-  restore, and updates by APK upload or from a GitHub repository.
+- **Web settings page** — every setting, in French or English, with a live preview of the
+  frame, an optional PIN, backup and restore, and updates by APK upload or from a GitHub
+  repository.
 
 | Two portraits side by side | "On this day" |
 | --- | --- |
@@ -64,7 +69,7 @@ troubleshooting.
 ## Build
 
 ```
-./gradlew assembleRelease
+./gradlew testReleaseUnitTest assembleRelease
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 

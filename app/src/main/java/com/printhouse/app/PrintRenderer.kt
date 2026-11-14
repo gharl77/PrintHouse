@@ -27,8 +27,9 @@ import kotlin.math.sin
  *
  * [dark] : carton noir uni, qui se confond avec le tour de la tablette ; sinon carton crème texturé.
  * [marginVmin] : largeur de la marge, en centièmes du petit côté de l'écran.
+ * [strength] : intensité du rendu papier, de 0 (photo d'origine) à 1 (tirage très mat).
  */
-class PrintRenderer(val w: Int, val h: Int, val dark: Boolean, val marginVmin: Float) {
+class PrintRenderer(val w: Int, val h: Int, val dark: Boolean, val marginVmin: Float, val strength: Float = 1f) {
     private val unit = min(w, h) / 100f // équivalent d'un « vmin »
     private val margin = marginVmin * unit
 
@@ -128,15 +129,18 @@ class PrintRenderer(val w: Int, val h: Int, val dark: Boolean, val marginVmin: F
 
         // Encre sur papier mat : couleurs un peu retenues, contraste adouci, puis toute la gamme
         // ramenée entre le noir d'une encre mate et le blanc du papier (jamais un blanc d'écran).
-        val cm = ColorMatrix().apply { setSaturation(0.87f) }
-        val k = 0.93f
+        fun mix(full: Float) = 1f + (full - 1f) * strength // de « rien » (1) à l'effet complet
+        val cm = ColorMatrix().apply { setSaturation(mix(0.87f)) }
+        val k = mix(0.93f)
         val o = 127.5f * (1 - k)
         cm.postConcat(ColorMatrix(floatArrayOf(k, 0f, 0f, 0f, o, 0f, k, 0f, 0f, o, 0f, 0f, k, 0f, o, 0f, 0f, 0f, 1f, 0f)))
-        fun scale(ink: Int, paper: Int) = (paper - ink) / 255f
+        // Noir et blanc de la photo ramenés vers ceux de l'encre et du papier, selon l'intensité.
+        fun floor(ink: Int) = ink * strength
+        fun scale(ink: Int, paper: Int) = (255f + (paper - 255f) * strength - floor(ink)) / 255f
         cm.postConcat(ColorMatrix(floatArrayOf(
-            scale(Color.red(INK), Color.red(PAPER)), 0f, 0f, 0f, Color.red(INK).toFloat(),
-            0f, scale(Color.green(INK), Color.green(PAPER)), 0f, 0f, Color.green(INK).toFloat(),
-            0f, 0f, scale(Color.blue(INK), Color.blue(PAPER)), 0f, Color.blue(INK).toFloat(),
+            scale(Color.red(INK), Color.red(PAPER)), 0f, 0f, 0f, floor(Color.red(INK)),
+            0f, scale(Color.green(INK), Color.green(PAPER)), 0f, 0f, floor(Color.green(INK)),
+            0f, 0f, scale(Color.blue(INK), Color.blue(PAPER)), 0f, floor(Color.blue(INK)),
             0f, 0f, 0f, 1f, 0f,
         )))
         val p = Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply { colorFilter = ColorMatrixColorFilter(cm) }
@@ -145,7 +149,10 @@ class PrintRenderer(val w: Int, val h: Int, val dark: Boolean, val marginVmin: F
         // Grain du papier par-dessus l'encre, puis l'ombre du carton.
         c.save()
         c.clipRect(r)
-        c.drawPaint(Paint().apply { shader = BitmapShader(grain, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT) })
+        c.drawPaint(Paint().apply {
+            shader = BitmapShader(grain, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+            alpha = (255 * strength).toInt()
+        })
         drawInnerShadow(c, r)
         c.restore()
     }

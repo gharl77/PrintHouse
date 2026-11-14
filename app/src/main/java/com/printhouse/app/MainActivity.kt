@@ -286,6 +286,7 @@ class MainActivity : Activity() {
         val withCaption = settings.caption
         val dark = settings.matDark
         val margin = settings.marginVmin
+        val strength = settings.printStrength.coerceIn(0, 100) / 100f
         io.execute {
             try {
                 val page = app.library.page(step)
@@ -293,18 +294,18 @@ class MainActivity : Activity() {
                     main.post { done() }
                     return@execute
                 }
-                val r = renderer?.takeIf { it.w == w && it.h == h && it.dark == dark && it.marginVmin == margin }
-                    ?: PrintRenderer(w, h, dark, margin).also { renderer = it }
+                val r = renderer?.takeIf { it.w == w && it.h == h && it.dark == dark && it.marginVmin == margin && it.strength == strength }
+                    ?: PrintRenderer(w, h, dark, margin, strength).also { renderer = it }
                 val captions = page.photos.map { if (withCaption) it.caption() else "" }
                 val frame = r.compose(page.bitmaps, captions)
                 page.bitmaps.forEach { it.recycle() }
                 val label = page.photos.map { it.caption() }.filter { it.isNotEmpty() }.joinToString(" | ")
-                // Pour Home Assistant : la même image, réduite, en JPEG.
-                val jpeg = if (app.mqtt.connected) ByteArrayOutputStream().also { out ->
+                // Pour la page web et Home Assistant : la même image, réduite, en JPEG.
+                val jpeg = ByteArrayOutputStream().also { out ->
                     val small = Bitmap.createScaledBitmap(frame, 960, 960 * h / w, true)
                     small.compress(Bitmap.CompressFormat.JPEG, 82, out)
                     small.recycle()
-                }.toByteArray() else null
+                }.toByteArray()
                 main.post {
                     view.show(frame, r, if (quick) FrameView.QUICK_FADE_MS else FrameView.FADE_MS) { done() }
                     app.photoShown(label, jpeg)

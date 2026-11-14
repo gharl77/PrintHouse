@@ -24,7 +24,13 @@ object Immich {
     data class Server(val url: String, val key: String)
 
     /** Critères d'une recherche : un album et une personne au plus, tirés au sort par [Library]. */
-    data class Filter(val favorites: Boolean = false, val albumId: String? = null, val personId: String? = null, val takenAfter: String? = null)
+    data class Filter(
+        val favorites: Boolean = false, val albumId: String? = null, val personId: String? = null,
+        val takenAfter: String? = null, val takenBefore: String? = null,
+    )
+
+    /** Une personne d'Immich et sa date de naissance (« AAAA-MM-JJ », ou null). */
+    data class Person(val id: String, val name: String, val birthDate: String?)
 
     data class Photo(
         val id: String, val date: String?, val city: String?, val country: String?,
@@ -38,9 +44,10 @@ object Immich {
         val hasCamera: Boolean? = null,
         /** Plus grand côté en pixels (0 = inconnu). */
         val longSide: Int = 0,
+        /** « Ophélie, 3 ans » : âge des personnes au moment de la photo (vide = non affiché). */
+        val ages: String = "",
     ) {
-        /** Capture d'écran : son nom le dit, ou c'est un PNG sans appareil photo. */
-        val looksLikeScreenshot get() = SCREENSHOT.containsMatchIn(fileName) || (mime == "image/png" && hasCamera == false)
+        val looksLikeScreenshot get() = Logic.looksLikeScreenshot(fileName, mime, hasCamera)
 
         /** « Québec · juillet 2019 », ou « Québec · il y a 5 ans » pour un souvenir. */
         fun caption(): String {
@@ -49,17 +56,16 @@ object Immich {
                 yearsAgo > 1 -> tr("il y a %d ans").format(yearsAgo)
                 else -> monthYear(date)
             }
-            return listOfNotNull(city ?: country, time).joinToString(" · ")
+            return listOfNotNull(ages.ifEmpty { null }, city ?: country, time).joinToString(" · ")
         }
 
         fun json(): JSONObject = JSONObject().put("id", id).put("date", date ?: "").put("city", city ?: "")
-            .put("country", country ?: "").put("yearsAgo", yearsAgo)
+            .put("country", country ?: "").put("yearsAgo", yearsAgo).put("ages", ages)
 
         companion object {
-            private val SCREENSHOT = Regex("screen ?shot|capture d.[ée]cran|^capture[ _-]", RegexOption.IGNORE_CASE)
             fun from(o: JSONObject) = Photo(
                 o.getString("id"), o.optString("date").ifEmpty { null }, o.optString("city").ifEmpty { null },
-                o.optString("country").ifEmpty { null }, null, o.optInt("yearsAgo"),
+                o.optString("country").ifEmpty { null }, null, o.optInt("yearsAgo"), ages = o.optString("ages"),
             )
         }
     }
@@ -132,6 +138,7 @@ object Immich {
         f.albumId?.let { put("albumIds", JSONArray().put(it)) }
         f.personId?.let { put("personIds", JSONArray().put(it)) }
         f.takenAfter?.let { put("takenAfter", it) }
+        f.takenBefore?.let { put("takenBefore", it) }
     }
 
     private fun iso(c: Calendar) = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US).format(c.time)
@@ -179,6 +186,41 @@ object Immich {
             val items = JSONObject(text).optJSONObject("assets")?.optJSONArray("items")
             (0 until (items?.length() ?: 0)).map { photo(items!!.getJSONObject(it)) }
         }.filter { it.date?.startsWith(day) == true }.sortedBy { it.date }
+    }
+
+    /** Fenêtre de [days] jours autour d'aujourd'hui, [years] années plus tôt : (début, fin) au format ISO. */
+    fun seasonWindow(years: Int, days: Int): Pair<String, String> {
+        val mid = yearsBefore(years)
+        val from = (mid.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -days) }
+        val to = (mid.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, days + 1) }
+        return iso(from) to iso(to)
+    }
+
+    private fun person(o: JSONObject) = Person(o.optString("id"), o.optString("name"), o.text("birthDate")?.take(10))
+
+    /** Les personnes nommées qui ont une date de naissance dans Immich. */
+    fun peopleWithBirthDate(server: Server): List<Person> = parse {
+        val arr = JSONObject(json(server, "/api/people?size=500")).optJSONArray("people") ?: JSONArray()
+        (0 until arr.length()).map { person(arr.getJSONObject(it)) }.filter { it.name.isNotBlank() && it.birthDate != null }
+    }
+
+    /** Les personnes reconnues sur une photo. */
+    fun peopleOf(server: Server, id: String): List<Person> = parse {
+        val arr = JSONObject(json(server, "/api/assets/$id")).optJSONArray("people") ?: JSONArray()
+        (0 until arr.length()).map { person(arr.getJSONObject(it)) }.filter { it.name.isNotBlank() }
+    }
+
+    /** « Ophélie, 3 ans » (ou « 4 mois » avant un an) pour quelqu'un né le [birth], à la date [at]. */
+    fun ageText(name: String, birth: String, at: String?): String? {
+        val (years, months) = Logic.age(birth, at ?: return null) ?: return null
+        val age = when {
+            years >= 2 -> tr("%d ans").format(years)
+            years == 1 -> tr("1 an")
+            months >= 2 -> tr("%d mois").format(months)
+            months == 1 -> tr("1 mois")
+            else -> tr("nouveau-né")
+        }
+        return "$name, $age"
     }
 
     /** Marque la photo comme favorite dans Immich (permission asset.update). */

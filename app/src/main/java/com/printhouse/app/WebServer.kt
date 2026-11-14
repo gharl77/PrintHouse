@@ -151,6 +151,11 @@ class WebServer(private val app: App) {
                 Reply(502, JSON, err(e.message ?: "Immich injoignable"))
             }
         }
+        // L'image actuellement sur le cadre, passe-partout compris.
+        if (method == "GET" && path == "/api/frame.jpg") {
+            val jpeg = app.shownJpeg ?: return Reply(404, JSON, err("Introuvable"))
+            return Reply(200, "image/jpeg", "", jpeg)
+        }
         // Vignette d'une photo (pour la liste des photos écartées).
         THUMB.matchEntire(path)?.let { m ->
             if (method != "GET") return Reply(404, JSON, err("Introuvable"))
@@ -196,6 +201,11 @@ class WebServer(private val app: App) {
                     I18n.init(settings)
                     redraw()
                 }
+                if (req.has("seasonShare")) settings.seasonShare = req.optInt("seasonShare").coerceIn(0, 100)
+                if (req.has("repeatDays")) settings.repeatDays = req.optInt("repeatDays").coerceIn(0, 365)
+                if (req.has("birthdayShare")) settings.birthdayShare = req.optInt("birthdayShare").coerceIn(0, 100)
+                if (req.has("ageCaption")) req.optString("ageCaption").let { if (it in setOf("never", "birthday", "always")) settings.ageCaption = it }
+                if (req.has("printStrength")) { settings.printStrength = req.optInt("printStrength").coerceIn(0, 100); redraw() }
                 if (req.has("memoryShare")) settings.memoryShare = req.optInt("memoryShare").coerceIn(0, 100)
                 if (req.has("pairPortraits")) settings.pairPortraits = req.optBoolean("pairPortraits")
                 if (req.has("interval")) settings.intervalMinutes = req.optInt("interval", 5).coerceIn(1, 1440)
@@ -243,6 +253,24 @@ class WebServer(private val app: App) {
             "POST /api/next" -> { val n = if (req.optInt("step", 1) < 0) -1 else 1; main.post { app.step(n) }; ok(JSONObject().put("ok", true)) }
             "POST /api/screen" -> { val on = req.optBoolean("on", true); main.post { app.setScreen(on) }; ok(JSONObject().put("ok", true)) }
             "POST /api/hidden/clear" -> { app.library.clearHidden(); ok(state()) }
+            "GET /api/recent" -> ok(JSONObject().put("photos", JSONArray(app.library.recent(12).map {
+                JSONObject().put("id", it.id).put("caption", it.caption())
+            })))
+            "POST /api/hide" -> {
+                val id = req.optString("id")
+                if (!UUID.matches(id)) return Reply(400, JSON, err("Requête invalide"))
+                app.library.hide(id)
+                if (app.library.current.any { it.id == id }) main.post { app.step(1) }
+                ok(state())
+            }
+            "POST /api/favorite" -> immich {
+                val id = req.optString("id")
+                if (!UUID.matches(id)) throw ImmichException("Requête invalide")
+                Immich.favorite(settings.server, id)
+                JSONObject().put("ok", true)
+            }
+            // Pour vérifier la relance automatique après une erreur fatale.
+            "POST /api/crash/test" -> { main.postDelayed({ throw IllegalStateException("Essai de plantage demandé depuis la page web") }, 300); ok(JSONObject().put("ok", true)) }
             "GET /api/hidden" -> ok(JSONObject().put("ids", JSONArray(app.library.hiddenIds)))
             "POST /api/hidden/restore" -> { app.library.restore(req.optString("id")); ok(state()) }
             "POST /api/export" -> ok(settings.export(req.optBoolean("secrets")).put("version", app.version))
@@ -337,6 +365,18 @@ class WebServer(private val app: App) {
             .put("repo", settings.updateRepo)
             .put("latest", app.updater.latest)
             .put("available", app.updater.available))
+        .put("seasonShare", settings.seasonShare)
+        .put("repeatDays", settings.repeatDays)
+        .put("birthdayShare", settings.birthdayShare)
+        .put("ageCaption", settings.ageCaption)
+        .put("printStrength", settings.printStrength)
+        .put("birthdaysToday", JSONArray(app.library.birthdaysToday))
+        .put("battery", app.battery)
+        .put("charging", app.charging)
+        .put("stats", app.library.stats.let {
+            JSONObject().put("shown", it.shown).put("screenshots", it.screenshots).put("small", it.small).put("noCamera", it.noCamera)
+                .put("series", it.series).put("memories", it.memories).put("season", it.season).put("birthdays", it.birthdays)
+        })
         .put("hiddenCount", app.library.hiddenCount)
         .put("cachedCount", app.library.cachedCount)
         .put("shown", app.shownCaption)
@@ -384,6 +424,7 @@ class WebServer(private val app: App) {
 
     companion object {
         private const val JSON = "application/json"
+        private val UUID = Regex("""^[0-9a-fA-F-]{36}$""")
         private val THUMB = Regex("""^/api/assets/([0-9a-fA-F-]{36})/thumbnail$""")
         private val FACE = Regex("""^/api/people/([0-9a-fA-F-]{36})/thumbnail$""")
         private val ENTITY = Regex("""^[a-z_]+\.[a-z0-9_]+$""")

@@ -1,8 +1,13 @@
 package com.printhouse.app
 
 import android.app.Application
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.net.wifi.WifiManager
 import android.os.PowerManager
 
@@ -37,6 +42,16 @@ class App : Application() {
     @Volatile var shownCaption = ""
         private set
 
+    /** L'image affichée sur le cadre (JPEG réduit), pour la page web. */
+    @Volatile var shownJpeg: ByteArray? = null
+        private set
+
+    /** Batterie de la tablette, en % (-1 = inconnue), et si elle est en charge. */
+    @Volatile var battery = -1
+        private set
+    @Volatile var charging = false
+        private set
+
     val version: String get() = packageManager.getPackageInfo(packageName, 0).versionName ?: ""
 
     private var wakeLock: PowerManager.WakeLock? = null
@@ -55,6 +70,49 @@ class App : Application() {
         ha.restart()
         mqtt.restart()
         updater.startPeriodicCheck()
+        watchBattery()
+        restartOnCrash()
+    }
+
+    /** Suit le niveau de batterie, pour Home Assistant (couper la charge avec une prise connectée). */
+    private fun watchBattery() {
+        registerReceiver(object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
+                val pct = if (level >= 0 && scale > 0) level * 100 / scale else -1
+                val plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+                if (pct != battery || plugged != charging) {
+                    battery = pct
+                    charging = plugged
+                    mqtt.publishState()
+                }
+            }
+        }, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    }
+
+    /**
+     * Un cadre doit tenir 24 heures sur 24 : après une erreur fatale, l'app se ferme proprement
+     * et Android la relance deux secondes plus tard (au lieu de laisser « s'est arrêté » à l'écran).
+     */
+    private fun restartOnCrash() {
+        Thread.setDefaultUncaughtExceptionHandler { _, e ->
+            try {
+                android.util.Log.e("PrintHouse", "Erreur fatale, relance", e)
+                scheduleRestart()
+            } finally {
+                android.os.Process.killProcess(android.os.Process.myPid())
+                System.exit(10)
+            }
+        }
+    }
+
+    fun scheduleRestart() {
+        val pi = PendingIntent.getActivity(
+            this, 1, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        getSystemService(AlarmManager::class.java).set(AlarmManager.RTC, System.currentTimeMillis() + 2000, pi)
     }
 
     /**
@@ -73,6 +131,7 @@ class App : Application() {
 
     fun photoShown(caption: String, jpeg: ByteArray?) {
         shownCaption = caption
+        shownJpeg = jpeg
         mqtt.publishState()
         jpeg?.let { mqtt.publishImage(it) }
     }

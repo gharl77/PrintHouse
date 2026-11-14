@@ -127,6 +127,10 @@ These images stay in Immich; the frame just skips them.
   photo in 4, 1 in 2, or memories only. Its caption reads "5 years ago" instead of the month.
 - **Series** — how often a photo is followed by up to three more from the same day, in the
   order they were taken, like turning the pages of an album.
+- **Season** — how often a photo from the same time of year (three weeks either side of today)
+  in a past year is shown: winter in winter, summer in summer.
+- **Do not show a photo again for** — 3 days to 1 month. The frame remembers what it has shown
+  and avoids it; if the filters leave nothing else, it shows a recent photo rather than nothing.
 - **Two portrait photos side by side** — pairs two portrait photos in the same mat.
 - **Caption under the photo** — place and month, in pencil-like italics.
 
@@ -134,9 +138,28 @@ These images stay in Immich; the frame just skips them.
 
 ![Two portrait photos in one mat](screenshots/frame-portraits.jpg)
 
-**On the frame** shows what is currently displayed and has **Previous** and **Next** buttons.
-It also tells you how many photos are kept on the tablet: the last 80 photos shown are stored
-locally so the frame keeps going when Immich is unreachable.
+**Birthdays and ages**
+
+Both use the birth dates entered in Immich (on each person's page) and need `person.read`.
+
+- **On someone's birthday, show their photos** — no more than usual, 1 photo in 2, or only
+  their photos. With people chosen above, only their birthdays count.
+- **Age in the caption** — never, on their birthday only, or always: "Emma, 3 years old ·
+  Lisbon · July 2019", for up to two people per photo. Babies get months.
+
+The age is worked out from the date Immich holds for the photo. A scanned print, or a photo of
+a photo, carries the date it was scanned unless you corrected it in Immich, and then shows the
+wrong age.
+
+**On the frame** shows a live preview of the frame, what is currently displayed, and
+**Previous** and **Next** buttons. Under it:
+
+- how many photos are kept on the tablet — the last 80 shown are stored locally so the frame
+  keeps going when Immich is unreachable;
+- counters since the app started: photos shown, memories, seasonal and birthday photos, series,
+  and images skipped by the filters;
+- **Latest photos shown** — the last twelve, each with **Favourite** and **Set aside** buttons,
+  so you can act on a photo you saw go by without walking to the frame.
 
 **Photos set aside** lists every photo hidden with a double tap, with a thumbnail and a **Put
 back** button, and a button to show them all again.
@@ -148,6 +171,9 @@ back** button, and a button to show them all again.
 - **Board colour** — *Black* is plain and blends into the tablet's bezel. *Cream* is textured
   like a framing board, with soft room light across it.
 - **Margin width** — narrow, medium or wide.
+- **Paper look** — how strongly the photo is turned into a matte print. At 100 % blacks are
+  lifted, whites take the colour of paper and grain is added; at 0 % the photo is shown as it
+  is in Immich.
 
 ![The cream mat with a wide margin](screenshots/frame-cream.jpg)
 
@@ -198,6 +224,7 @@ broker, user and password. The frame then appears under the MQTT integration as 
 | Photo on display | Sensor | The caption of the current photo |
 | Current photo | Image | The picture currently on the frame, mat included |
 | Day brightness, Evening brightness | Numbers | 1–100 % |
+| Battery, Charging | Sensor, binary sensor | The tablet's battery level and whether it is charging |
 | Photo source | Select | Whole library, favourites, chosen albums |
 | On this day | Select | Never, 1 photo in 4, 1 in 2, memories only |
 
@@ -220,6 +247,9 @@ automation:
         data:
           option: Memories only
 ```
+
+A frame is plugged in all year, which wears a battery kept at 100 %. With the battery sensor
+and a smart plug you can let Home Assistant charge the tablet only between, say, 40 % and 80 %.
 
 While either link is active, PrintHouse keeps the tablet's processor and Wi-Fi awake so the
 frame can be woken remotely when its screen is off.
@@ -257,6 +287,7 @@ time you must allow PrintHouse to install apps. After an update the frame restar
 - It starts by itself when the tablet boots and after an update, and shows over the lock
   screen.
 - The Back button does nothing on the frame.
+- If the app ever crashes, it closes and Android restarts it two seconds later.
 - To make the Home button return to the frame, set PrintHouse as the tablet's home app
   (Settings → Apps → Default apps → Home screen), or from a computer:
 
@@ -315,11 +346,19 @@ You need JDK 17 and the Android SDK, with its path in `local.properties` (`sdk.d
 app has no dependency beyond Kotlin and the Android framework. The release build is minified
 and signed with the development key.
 
+```
+./gradlew testReleaseUnitTest
+```
+
+runs the unit tests: the time, age, birthday and version calculations, the screenshot rule, and
+a check that every French text of the app and of the web page has its English translation.
+
 | File | Role |
 | --- | --- |
 | `MainActivity.kt`, `FrameView.kt` | The frame: gestures, fades, night, brightness |
 | `PrintRenderer.kt` | Draws the mat and the prints |
 | `Library.kt`, `Immich.kt` | Choosing photos; talking to Immich |
+| `Logic.kt` | Pure calculations, covered by the unit tests |
 | `WebServer.kt`, `assets/config.html` | The settings page and its API |
 | `HaLink.kt`, `MqttDevice.kt`, `MqttClient.kt` | Home Assistant by token; MQTT device |
 | `Settings.kt`, `SecretBox.kt` | Settings and encrypted secrets |

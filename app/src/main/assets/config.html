@@ -93,6 +93,13 @@ h2{margin:0 0 10px;font-size:17px}
 .sugs button .av{width:30px;height:30px}
 .sugs small{margin-left:auto;color:var(--mute);font-size:12px}
 .sugs .none{color:var(--mute);font-size:13px;padding:6px 8px}
+.preview{display:block;width:100%;max-width:520px;border-radius:10px;border:1px solid var(--line);background:#000;aspect-ratio:16/10;object-fit:contain;margin:8px 0}
+.recent{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px;margin:8px 0}
+.recent figure{margin:0;display:grid;gap:5px}
+.recent .th{aspect-ratio:1;border-radius:10px;background:var(--card2) center/cover no-repeat}
+.recent figcaption{font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recent .acts{display:flex;gap:4px}
+.recent .acts button{flex:1;padding:4px 6px;font-size:12px}
 .hid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin:8px 0}
 .hid figure{margin:0;display:grid;gap:6px}
 .hid .th{aspect-ratio:1;border-radius:10px;background:var(--card2) center/cover no-repeat}
@@ -199,11 +206,42 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
         <option value="25">Souvent</option><option value="50">Très souvent</option>
       </select>
     </div>
+    <div class="set">
+      <label class="f" for="seasonShare">Saison : photos de la même période de l'année</label>
+      <select id="seasonShare">
+        <option value="0">Jamais</option><option value="25">1 photo sur 4</option><option value="50">1 photo sur 2</option>
+      </select>
+    </div>
+    <div class="set">
+      <label class="f" for="repeatDays">Ne pas remontrer une photo avant</label>
+      <select id="repeatDays">
+        <option value="0">Sans importance</option><option value="3">3 jours</option><option value="7">1 semaine</option>
+        <option value="14">2 semaines</option><option value="30">1 mois</option>
+      </select>
+    </div>
     <label class="check"><input type="checkbox" id="pairPortraits"> Deux photos verticales côte à côte</label>
     <label class="check"><input type="checkbox" id="caption"> Légende sous la photo (lieu et date)</label>
   </section>
   <section class="card">
+    <h2>Anniversaires et âges</h2>
+    <p class="muted">D'après les dates de naissance inscrites dans Immich (fiche de la personne). Sans date de naissance, rien ne change.</p>
+    <div class="set">
+      <label class="f" for="birthdayShare">Le jour de l'anniversaire de quelqu'un, montrer ses photos</label>
+      <select id="birthdayShare">
+        <option value="0">Pas plus que d'habitude</option><option value="50">1 photo sur 2</option><option value="100">Seulement ses photos</option>
+      </select>
+    </div>
+    <div class="set">
+      <label class="f" for="ageCaption">Âge dans la légende (« Emma, 3 ans »)</label>
+      <select id="ageCaption">
+        <option value="never">Jamais</option><option value="birthday">Le jour de l'anniversaire</option><option value="always">Toujours</option>
+      </select>
+    </div>
+    <p class="muted" id="birthdayInfo"></p>
+  </section>
+  <section class="card">
     <h2>Sur le cadre</h2>
+    <img class="preview" id="preview" alt="Aperçu du cadre">
     <p class="muted" id="shown"></p>
     <div class="row">
       <button id="prev">‹ Précédente</button>
@@ -211,6 +249,9 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
     </div>
     <details class="more"><summary>Les gestes sur la tablette</summary><p class="muted">Toucher ou balayer vers la gauche : photo suivante. Balayer vers la droite : photo précédente. Balayer vers le haut : ajouter aux favoris d'Immich. Balayer vers le bas : fiche de la photo (date, lieu, personnes, albums). Double toucher : écarter la photo. Appui long : réglages.</p></details>
     <p class="muted" id="cacheInfo"></p>
+    <p class="muted" id="statsInfo"></p>
+    <h3 class="sub">Dernières photos affichées</h3>
+    <div class="recent" id="recentList"></div>
   </section>
   <section class="card">
     <h2>Photos écartées</h2>
@@ -233,6 +274,11 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
       <label class="f">Largeur de la marge</label>
       <div class="seg" id="marginSize"><button data-v="small">Étroite</button><button data-v="medium">Moyenne</button><button data-v="large">Large</button></div>
     </div>
+    <div class="set">
+      <label class="f" for="printStrength">Rendu papier</label>
+      <input id="printStrength" type="range" min="0" max="100" step="5"><output id="printStrengthOut"></output>
+    </div>
+    <p class="muted">À 100 %, un tirage très mat : noirs relevés, blancs couleur papier, grain. À 0 %, la photo telle qu'elle est dans Immich.</p>
     <p class="muted">Le noir se confond avec le tour de la tablette. Le crème est texturé, comme un carton d'encadrement. Le changement se voit tout de suite sur le cadre.</p>
   </section>
 </main>
@@ -334,7 +380,7 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
   </section>
   <section class="card">
     <h2>Cadre visible dans Home Assistant (MQTT)</h2>
-    <p class="muted">Le jeton sert à lire votre capteur ; MQTT sert à montrer le cadre dans Home Assistant. Il y apparaît comme un appareil, avec un interrupteur « Écran », des boutons photo suivante et précédente, la photo en cours (image et légende), la luminosité de jour et du soir, la source des photos et la part de « Ce jour-là ».</p>
+    <p class="muted">Le jeton sert à lire votre capteur ; MQTT sert à montrer le cadre dans Home Assistant. Il y apparaît comme un appareil, avec un interrupteur « Écran », des boutons photo suivante et précédente, la photo en cours (image et légende), la luminosité de jour et du soir, la source des photos, la part de « Ce jour-là », et la batterie de la tablette (pour couper sa charge avec une prise connectée).</p>
     <span id="mqttStatus" class="badge">…</span>
     <label class="check"><input type="checkbox" id="mqttEnabled"> Activer MQTT</label>
     <div class="row">
@@ -615,6 +661,16 @@ function render() {
   setSelect("interval", S.interval);
   setSelect("memoryShare", S.memoryShare);
   setSelect("seriesShare", S.seriesShare);
+  setSelect("seasonShare", S.seasonShare);
+  setSelect("repeatDays", S.repeatDays);
+  setSelect("birthdayShare", S.birthdayShare);
+  $("ageCaption").value = S.ageCaption;
+  $("birthdayInfo").textContent = S.birthdaysToday.length ? t("Aujourd'hui, c'est l'anniversaire de ") + S.birthdaysToday.join(", ") + "." : "";
+  $("printStrength").value = S.printStrength;
+  $("printStrengthOut").textContent = S.printStrength + " %";
+  const st = S.stats, skipped = st.screenshots + st.small + st.noCamera;
+  $("statsInfo").textContent = t("Depuis le lancement : ") + st.shown + t(" photo(s) affichée(s), dont ") + st.memories + t(" souvenir(s), ") + st.season + t(" de saison et ") + st.birthdays + t(" d'anniversaire ; ") + st.series + t(" série(s) ; ") + skipped + t(" image(s) passée(s) par les filtres.");
+  drawPreview();
   for (const id of ["skipScreenshots", "skipSmall", "skipNoCamera", "tabletLock"]) $(id).checked = S[id];
   $("language").value = S.language;
   setField("updateRepo", S.update.repo);
@@ -720,8 +776,11 @@ async function load() {
   if (S.ha.url && S.ha.tokenSet) loadHaEntities().catch(() => {});
 }
 // L'état du capteur de présence est relu tant que l'onglet Home Assistant est ouvert.
+// L'état est relu tant que l'onglet Photos (aperçu) ou Home Assistant (présence) est ouvert.
 setInterval(async () => {
-  if (!S || !(S.ha.active || S.mqtt.enabled) || document.hidden || document.querySelector('[data-panel="ha"]').hidden) return;
+  if (!S || document.hidden) return;
+  const open = name => !document.querySelector('[data-panel="' + name + '"]').hidden;
+  if (!open("photos") && !(open("ha") && (S.ha.active || S.mqtt.enabled))) return;
   try { S = await api("GET", "/api/state"); render(); } catch (e) {}
 }, 5000);
 
@@ -736,10 +795,11 @@ async function save(body) {
 for (const id of ["sourceMode", "nightFrom", "nightTo", "morningFrom", "eveningFrom"]) {
   $(id).addEventListener("change", () => { if ($(id).value) save({[id]: $(id).value}); });
 }
-for (const id of ["sinceYears", "interval", "memoryShare", "seriesShare", "dayBrightness", "eveningBrightness"]) {
+for (const id of ["sinceYears", "interval", "memoryShare", "seriesShare", "seasonShare", "repeatDays", "birthdayShare", "printStrength", "dayBrightness", "eveningBrightness"]) {
   $(id).addEventListener("change", () => save({[id]: Number($(id).value)}));
 }
-for (const id of ["dayBrightness", "eveningBrightness"]) {
+$("ageCaption").addEventListener("change", () => save({ageCaption: $("ageCaption").value}));
+for (const id of ["dayBrightness", "eveningBrightness", "printStrength"]) {
   $(id).addEventListener("input", () => { $(id + "Out").textContent = $(id).value + " %"; });
 }
 for (const id of ["pairPortraits", "caption", "night", "autoBrightness", "skipScreenshots", "skipSmall", "skipNoCamera", "tabletLock"]) {
@@ -759,8 +819,54 @@ async function step(n) {
 $("next").onclick = () => step(1);
 $("prev").onclick = () => step(-1);
 
-// ---- Photos écartées : une vignette chacune, à remettre une par une ----
+// ---- Aperçu du cadre et dernières photos affichées ----
 const thumbUrls = new Map();
+function thumbInto(el, id) {
+  const show = u => { if (u) el.style.backgroundImage = "url(" + u + ")"; };
+  if (thumbUrls.has(id)) return show(thumbUrls.get(id));
+  // Chargé par fetch (et non par une balise image) pour pouvoir envoyer le code PIN.
+  fetch("/api/assets/" + id + "/thumbnail", {headers: {"X-Pin": PIN}}).then(r => r.ok ? r.blob() : null)
+    .then(b => { const u = b ? URL.createObjectURL(b) : ""; thumbUrls.set(id, u); show(u); }).catch(() => {});
+}
+let previewFor = null, previewUrl = "";
+async function drawPreview() {
+  if (previewFor === S.shown) return;
+  previewFor = S.shown;
+  try {
+    const r = await fetch("/api/frame.jpg", {headers: {"X-Pin": PIN}});
+    if (r.ok) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(await r.blob());
+      $("preview").src = previewUrl;
+    }
+  } catch (e) {}
+  drawRecent();
+}
+async function drawRecent() {
+  let photos = [];
+  try { photos = (await api("GET", "/api/recent")).photos; } catch (e) { return; }
+  const box = $("recentList");
+  box.textContent = "";
+  for (const p of photos) {
+    const th = Object.assign(document.createElement("div"), {className: "th"});
+    thumbInto(th, p.id);
+    const hide = Object.assign(document.createElement("button"), {textContent: t("Écarter")});
+    hide.onclick = async () => {
+      try { S = await api("POST", "/api/hide", {id: p.id}); previewFor = null; render(); saved(t("Photo écartée")); } catch (e) { fail(e); }
+    };
+    const fav = Object.assign(document.createElement("button"), {textContent: t("Favori")});
+    fav.onclick = async () => {
+      try { await api("POST", "/api/favorite", {id: p.id}); saved(t("Ajoutée aux favoris d'Immich.")); } catch (e) { fail(e); }
+    };
+    const acts = Object.assign(document.createElement("div"), {className: "acts"});
+    acts.append(fav, hide);
+    const fig = document.createElement("figure");
+    fig.append(th, Object.assign(document.createElement("figcaption"), {textContent: p.caption || "—", title: p.caption || ""}), acts);
+    box.append(fig);
+  }
+}
+
+// ---- Photos écartées : une vignette chacune, à remettre une par une ----
 let hiddenShown = "";
 async function drawHidden() {
   let ids = [];
@@ -771,10 +877,7 @@ async function drawHidden() {
   box.textContent = "";
   for (const id of ids) {
     const th = Object.assign(document.createElement("div"), {className: "th"});
-    const show = u => { if (u) th.style.backgroundImage = "url(" + u + ")"; };
-    if (thumbUrls.has(id)) show(thumbUrls.get(id));
-    else fetch("/api/assets/" + id + "/thumbnail", {headers: {"X-Pin": PIN}}).then(r => r.ok ? r.blob() : null)
-      .then(b => { const u = b ? URL.createObjectURL(b) : ""; thumbUrls.set(id, u); show(u); }).catch(() => {});
+    thumbInto(th, id);
     const back = Object.assign(document.createElement("button"), {textContent: t("Remettre")});
     back.onclick = async () => {
       try { S = await api("POST", "/api/hidden/restore", {id}); render(); saved(t("Photo remise dans le défilement")); } catch (e) { fail(e); }

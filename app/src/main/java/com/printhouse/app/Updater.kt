@@ -21,7 +21,7 @@ class Updater(private val app: App) {
     @Volatile var latest = ""
         private set
     @Volatile private var latestUrl: String? = null
-    val available get() = latest.isNotEmpty() && compare(latest, app.version) > 0
+    val available get() = latest.isNotEmpty() && Logic.compareVersions(latest, app.version) > 0
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
 
     /** Vérifie une fois par jour (et peu après le démarrage) si une version plus récente est publiée. */
@@ -148,17 +148,6 @@ class Updater(private val app: App) {
     companion object {
         const val ACTION_RESULT = "com.printhouse.app.INSTALL_RESULT"
         private val REPO = Regex("""^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$""")
-
-        /** Compare deux versions « 1.2.3 » nombre par nombre. */
-        fun compare(a: String, b: String): Int {
-            val x = a.split('.').map { it.toIntOrNull() ?: 0 }
-            val y = b.split('.').map { it.toIntOrNull() ?: 0 }
-            for (i in 0 until maxOf(x.size, y.size)) {
-                val d = (x.getOrElse(i) { 0 }).compareTo(y.getOrElse(i) { 0 })
-                if (d != 0) return d
-            }
-            return 0
-        }
     }
 }
 
