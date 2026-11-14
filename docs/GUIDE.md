@@ -54,6 +54,9 @@ shows the address of its web settings page.
    | `asset.read` | Finding photos, reading their date and place |
    | `asset.view` | Displaying the images |
    | `album.read` | Listing albums and showing photos from chosen albums |
+
+   Themes ("dog", "landscape") need no extra permission, but they rely on Immich's smart
+   search, so machine learning must be enabled on your server.
    | `person.read` | Optional — choosing people, ages, and names in photo details |
    | `asset.update` | Optional — adding a photo to favourites from the frame |
    | `memory.read` | Optional — "On this day" in a single request instead of about fifty |
@@ -95,7 +98,7 @@ from the web page.
 
 The tablet serves its own settings page at `http://<tablet address>:8080` for as long as
 PrintHouse is running. The address is shown at the bottom of the tablet's settings screen and
-in **About & updates**. Add `#photos`, `#look`, `#screen`, `#conn`, `#ha`, `#security` or
+in **About & updates**. Add `#photos`, `#look`, `#screen`, `#conn`, `#ha`, `#security`, `#log` or
 `#about` to open a section directly.
 
 Every change is saved as you make it and applies to the frame right away. Sections with a
@@ -266,7 +269,7 @@ broker, user and password. The frame then appears under the MQTT integration as 
 | Day brightness, Evening brightness | Numbers | 1–100 % |
 | Battery, Charging | Sensor, binary sensor | The tablet's battery level and whether it is charging |
 | Guest mode | Switch | Limits the frame to the guest album |
-| Photo source | Select | Whole library, favourites, chosen albums |
+| Photo source | Select | Whole library, or favourites only |
 | On this day | Select | Never, 1 photo in 4, 1 in 2, memories only |
 
 Entity names follow the frame's language. An example automation that shows only memories on a
@@ -369,6 +372,9 @@ time you must allow PrintHouse to install apps. After an update the frame restar
 | The screen turns off while you are in the room | The sensor is a motion sensor. Use a presence sensor or a longer delay |
 | You wonder why the frame was off, or slow | Open the **Log** section of the settings page |
 | The frame is black when you walk in | The presence sensor has not noticed you yet. Touch the frame, or wait a few seconds |
+| A theme brings unrelated photos | Keep fewer photos per theme, word the theme as Immich's own search understands it, and double-tap intruders to set them aside |
+| "Immich's content search is not answering" under Themes | Machine learning is off or busy on the Immich server. People and albums keep working meanwhile |
+| The dog and the landscapes never show | Choosing people shows only photos with those people. Add themes or albums: the lists add up |
 | The same few photos keep coming back | The filters (albums, people, period, not-a-photo) leave few photos to choose from |
 | The update asks to "allow from this source" | Normal the first time: allow it on the tablet, then send the file again |
 | The settings page does not open | PrintHouse must be running; check the address in the tablet's settings screen. The address can change if your router does not reserve it |
