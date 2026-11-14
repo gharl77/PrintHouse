@@ -296,5 +296,6 @@ internal object I18nEn {
         "Réglages" to "Settings",
         " min" to " min",
         " photos" to " photos",
+        " »)" to "”)",
     )
 }

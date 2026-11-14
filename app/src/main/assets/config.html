@@ -927,6 +927,8 @@ $("apkFile").onchange = async () => {
 
 let savedTab = "photos";
 try { savedTab = localStorage.getItem("tab") || "photos"; } catch (e) {}
+// Lien direct vers une section : http://tablette:8080/#screen
+if (TABS[location.hash.slice(1)]) savedTab = location.hash.slice(1);
 (async () => {
   try {
     const lang = await (await fetch("/api/i18n")).json();

@@ -203,7 +203,7 @@ object Immich {
         try {
             val albums = JSONArray(json(server, "/api/albums?assetId=$id"))
             (0 until albums.length()).map { albums.getJSONObject(it).optString("albumName") }.filter { it.isNotEmpty() }.takeIf { it.isNotEmpty() }
-                ?.let { lines.add(tr("Albums") + " : " + it.joinToString(", ")) }
+                ?.let { lines.add(tr("Albums") + (if (I18n.english) ": " else " : ") + it.joinToString(", ")) }
         } catch (_: Exception) {
         }
         listOfNotNull(exif?.text("make"), exif?.text("model")).takeIf { it.isNotEmpty() }?.let { lines.add(it.joinToString(" ")) }
