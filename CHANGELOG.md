@@ -2,6 +2,13 @@
 
 Versions are numbered year.month.number.
 
+## 2026.11.4
+
+- If the tablet turns its screen off during the day without the frame asking for it, the frame
+  turns it back on within seconds and brings itself to the front.
+- The log now records these unexpected switch-offs, with whether the frame was in front and
+  holding the screen on, and when another window comes in front of the frame.
+
 ## 2026.11.3
 
 Fixes for a frame that looked frozen in the morning.

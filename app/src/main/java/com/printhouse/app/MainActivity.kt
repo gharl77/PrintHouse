@@ -183,6 +183,7 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        started = true
         hideSystemBars()
         displayTick.run()
         // post : la vue doit connaître sa taille avant de composer la première image.
@@ -194,6 +195,7 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         super.onStop()
+        started = false
         main.removeCallbacks(tick)
         main.removeCallbacks(displayTick)
     }
@@ -201,7 +203,17 @@ class MainActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
+        // Une fenêtre passée devant le cadre peut laisser l'écran s'éteindre : on en garde la trace.
+        else if (!dark() && !isFinishing) app.events.add(tr("Une autre fenêtre est passée devant le cadre"))
     }
+
+    private var started = false
+
+    /** Dans quel état est le cadre, pour le journal : visible ou non, et s'il retient bien l'écran. */
+    fun describe(): String = listOf(
+        tr(if (!started) "cadre en arrière-plan" else if (hasWindowFocus()) "cadre au premier plan" else "cadre visible mais derrière une autre fenêtre"),
+        tr(if (window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0) "maintien de l'écran demandé" else "maintien de l'écran non demandé"),
+    ).joinToString(", ")
 
     @Suppress("DEPRECATION")
     private fun hideSystemBars() {

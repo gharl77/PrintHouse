@@ -408,5 +408,14 @@ internal object I18nEn {
         "Toutes les photos de ces albums, quelles que soient les personnes qui y figurent." to "Every photo of these albums, whoever is in them.",
         "La recherche par contenu d'Immich ne répond pas : " to "Immich's content search is not answering: ",
         "Aucun thème." to "No theme.",
+        "Écran éteint par la tablette, sans que le cadre l'ait demandé" to "Screen turned off by the tablet, not by the frame",
+        "cadre fermé" to "frame closed",
+        "Écran rallumé par le cadre" to "Screen turned back on by the frame",
+        "Une autre fenêtre est passée devant le cadre" to "Another window came in front of the frame",
+        "cadre en arrière-plan" to "frame in the background",
+        "cadre au premier plan" to "frame in front",
+        "cadre visible mais derrière une autre fenêtre" to "frame visible but behind another window",
+        "maintien de l'écran demandé" to "keep-screen-on requested",
+        "maintien de l'écran non demandé" to "keep-screen-on not requested",
     )
 }

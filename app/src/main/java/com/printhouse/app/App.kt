@@ -77,6 +77,38 @@ class App : Application() {
         updater.startPeriodicCheck()
         watchBattery()
         restartOnCrash()
+        watchScreen()
+    }
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /**
+     * Le jour, l'écran ne doit jamais s'éteindre tout seul. S'il s'éteint alors que le cadre ne
+     * l'a pas demandé (délai de veille de la tablette, bouton, autre application), on le note
+     * dans le journal avec ce qu'on sait, et on le rallume quelques secondes plus tard.
+     */
+    private fun watchScreen() {
+        registerReceiver(object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                if (dark) return // nuit, pièce vide ou interrupteur : c'est voulu
+                events.add(tr("Écran éteint par la tablette, sans que le cadre l'ait demandé") + " (" + (frame?.describe() ?: tr("cadre fermé")) + ")")
+                main.postDelayed({ relight() }, RELIGHT_MS)
+            }
+        }, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        // Filet de sécurité, au cas où l'extinction n'aurait pas été signalée.
+        main.postDelayed(object : Runnable {
+            override fun run() {
+                relight()
+                main.postDelayed(this, 60_000L)
+            }
+        }, 60_000L)
+    }
+
+    private fun relight() {
+        if (dark || getSystemService(PowerManager::class.java).isInteractive) return
+        events.add(tr("Écran rallumé par le cadre"))
+        WakeReceiver.wake(this)
+        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     /** Suit le niveau de batterie, pour Home Assistant (couper la charge avec une prise connectée). */
@@ -244,6 +276,7 @@ class App : Application() {
 
     companion object {
         private const val NIGHT_PEEK_MS = 120_000L
+        private const val RELIGHT_MS = 3_000L
         lateinit var instance: App
             private set
     }
