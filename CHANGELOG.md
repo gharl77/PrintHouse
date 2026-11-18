@@ -4,6 +4,11 @@ Versions are numbered year.month.number.
 
 ## 2026.11.4
 
+- Fixed a frame that stayed black for hours. Once the screen had gone off during the day for
+  any reason (the power button, another window), it could not stay on again: Android only
+  honoured the window's "keep the screen on" request after the next layout pass, and the screen
+  timed out ten seconds after every wake-up, until a full night had passed. The frame now holds
+  the screen on with a lock of its own.
 - If the tablet turns its screen off during the day without the frame asking for it, the frame
   turns it back on within seconds and brings itself to the front.
 - The log now records these unexpected switch-offs, with whether the frame was in front and

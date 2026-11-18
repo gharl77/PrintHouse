@@ -247,6 +247,7 @@ class MainActivity : Activity() {
         }
         if (dark) window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        app.holdScreen(!dark)
         WakeReceiver.schedule(this, settings)
         // La nuit vient d'être raccourcie ou désactivée pendant que l'écran dormait.
         if (!dark && !getSystemService(PowerManager::class.java).isInteractive) WakeReceiver.wake(this)

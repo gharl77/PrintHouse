@@ -22,10 +22,13 @@ class EventLog(ctx: Context) {
         }
     }
 
-    /** Ajoute un événement. Le même texte répété dans les dix minutes n'est noté qu'une fois. */
-    @Synchronized fun add(text: String) {
+    /**
+     * Ajoute un événement. Le même texte répété dans les dix minutes n'est noté qu'une fois, sauf
+     * si [always] : certaines répétitions sont justement ce qu'on cherche à voir.
+     */
+    @Synchronized fun add(text: String, always: Boolean = false) {
         val now = System.currentTimeMillis()
-        if (items.asReversed().take(6).any { it.second == text && now - it.first < REPEAT_MS }) return
+        if (!always && items.asReversed().take(6).any { it.second == text && now - it.first < REPEAT_MS }) return
         items.add(now to text.take(300))
         while (items.size > MAX) items.removeAt(0)
         try { file.writeText(json().toString()) } catch (_: Exception) {}

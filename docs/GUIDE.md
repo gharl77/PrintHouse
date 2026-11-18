@@ -316,7 +316,8 @@ frame can be woken remotely when its screen is off.
 ![The Log section](screenshots/web-log.png)
 
 The frame keeps its last 300 events on the tablet: when and why the screen turned off or came
-back on (night, empty room, Screen switch, a touch, movement seen by the camera), errors
+back on (night, empty room, Screen switch, a touch, movement seen by the camera), switch-offs
+the frame did not ask for, windows that came in front of it, errors
 talking to Immich or Home Assistant, photos that took more than three seconds to arrive,
 updates and restarts. When the frame was black or seemed frozen, this is where to look.
 
@@ -334,12 +335,19 @@ updates and restarts. When the frame was black or seemed frozen, this is where t
 Android always asks for confirmation on the tablet's screen before installing, and the first
 time you must allow PrintHouse to install apps. After an update the frame restarts by itself.
 
+On some tablets Google Play Protect refuses an app that updates itself and the installation
+ends with `INSTALL_FAILED_VERIFICATION_FAILURE`. In that case install the APK from a computer
+with `adb install -r`, which Play Protect does not block.
+
 ## Keeping the frame on screen
 
 - PrintHouse keeps the screen on whenever it is in the foreground and it is not night.
 - It starts by itself when the tablet boots and after an update, and shows over the lock
   screen.
 - The Back button does nothing on the frame.
+- If the screen goes off during the day without the frame asking for it — the power button, the
+  tablet's own timeout — the frame turns it back on within a few seconds and notes it in the
+  log. To switch the frame off by day, use the **Screen** switch in Home Assistant.
 - If the app ever crashes, it closes and Android restarts it two seconds later.
 - To make the Home button return to the frame, set PrintHouse as the tablet's home app
   (Settings → Apps → Default apps → Home screen), or from a computer:
@@ -376,6 +384,8 @@ time you must allow PrintHouse to install apps. After an update the frame restar
 | "Immich's content search is not answering" under Themes | Machine learning is off or busy on the Immich server. People and albums keep working meanwhile |
 | The dog and the landscapes never show | Choosing people shows only photos with those people. Add themes or albums: the lists add up |
 | The same few photos keep coming back | The filters (albums, people, period, not-a-photo) leave few photos to choose from |
+| The update fails with `INSTALL_FAILED_VERIFICATION_FAILURE` | Google Play Protect blocked it. Install the APK over USB with `adb install -r` |
+| The frame was black during the day | The **Log** shows "Screen turned off by the tablet, not by the frame" with the time; the frame turns it back on by itself |
 | The update asks to "allow from this source" | Normal the first time: allow it on the tablet, then send the file again |
 | The settings page does not open | PrintHouse must be running; check the address in the tablet's settings screen. The address can change if your router does not reserve it |
 

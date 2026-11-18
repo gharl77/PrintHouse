@@ -91,7 +91,7 @@ class App : Application() {
         registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
                 if (dark) return // nuit, pièce vide ou interrupteur : c'est voulu
-                events.add(tr("Écran éteint par la tablette, sans que le cadre l'ait demandé") + " (" + (frame?.describe() ?: tr("cadre fermé")) + ")")
+                events.add(tr("Écran éteint par la tablette, sans que le cadre l'ait demandé") + " (" + (frame?.describe() ?: tr("cadre fermé")) + ")", always = true)
                 main.postDelayed({ relight() }, RELIGHT_MS)
             }
         }, IntentFilter(Intent.ACTION_SCREEN_OFF))
@@ -104,9 +104,28 @@ class App : Application() {
         }, 60_000L)
     }
 
+    private var screenLock: PowerManager.WakeLock? = null
+
+    /**
+     * Tient l'écran allumé ([on]) ou le laisse s'éteindre. Le drapeau « garder l'écran allumé » de
+     * la fenêtre ne suffit pas : quand l'écran se rallume alors que le drapeau était déjà posé,
+     * Android ne le reprend en compte qu'au prochain recalcul de la fenêtre, et l'écran se rééteint
+     * entre-temps au bout de dix secondes. Ce verrou-ci ne dépend d'aucune fenêtre.
+     */
+    fun holdScreen(on: Boolean) {
+        if (on) {
+            @Suppress("DEPRECATION")
+            val lock = screenLock ?: getSystemService(PowerManager::class.java)
+                .newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "printhouse:screen").apply { setReferenceCounted(false) }.also { screenLock = it }
+            if (!lock.isHeld) lock.acquire()
+        } else {
+            screenLock?.let { if (it.isHeld) it.release() }
+        }
+    }
+
     private fun relight() {
         if (dark || getSystemService(PowerManager::class.java).isInteractive) return
-        events.add(tr("Écran rallumé par le cadre"))
+        events.add(tr("Écran rallumé par le cadre"), always = true)
         WakeReceiver.wake(this)
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
