@@ -74,6 +74,7 @@ object Immich {
             fun from(o: JSONObject) = Photo(
                 o.getString("id"), o.optString("date").ifEmpty { null }, o.optString("city").ifEmpty { null },
                 o.optString("country").ifEmpty { null }, null, o.optInt("yearsAgo"), ages = o.optString("ages"),
+                dateReliable = o.optBoolean("dateReliable"),
             )
         }
     }

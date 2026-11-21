@@ -289,6 +289,69 @@ class PickerTest {
         assertEquals(0, fake.memoriesCalls + fake.onThisDayCalls + fake.randomCalls)
     }
 
+    // --- Thèmes à écarter, poids par personne, favoris du cadre ---
+
+    @Test fun `photos matching a theme to set aside are never shown`() {
+        val shots = (1..5).map { photo("id$it") }
+        val fake = Fake((1..12).map { photo("id$it") }).apply { themes = mapOf("capture d'écran" to shots) }
+        val rules = Rules(excludeThemes = listOf("capture d'écran"))
+        val p = picker()
+        p.resetIfChanged(rules)
+        p.next(fake, rules)   // la recherche part en arrière-plan : rien n'est encore retiré
+        later.runAll()
+        val shown = (1..40).map { p.next(fake, rules).id }.toSet()
+        assertTrue("$shown", shown.none { it in setOf("id1", "id2", "id3", "id4", "id5") })
+        assertEquals("une requête par thème et par jour", 1, fake.smartCalls)
+        assertTrue(p.stats.excluded > 0)
+    }
+
+    @Test fun `the search for themes to set aside never holds up a photo`() {
+        val fake = Fake().apply { themes = mapOf("document" to listOf(photo("id1"))) }
+        val rules = Rules(excludeThemes = listOf("document"))
+        val p = picker()
+        p.resetIfChanged(rules)
+        assertNotNull(p.next(fake, rules))
+        assertEquals(0, fake.smartCalls)
+        assertEquals(1, later.tasks.size)
+    }
+
+    @Test fun `a person marked often comes up more than one marked rarely`() {
+        val often = Choice("00000000-0000-4000-8000-000000000001", "Souvent", weight = 4)
+        val rarely = Choice("00000000-0000-4000-8000-000000000002", "Rarement", weight = 1)
+        val fake = Fake()
+        val rules = Rules(persons = listOf(often, rarely))
+        val p = picker()
+        p.resetIfChanged(rules)
+        repeat(600) { p.next(fake, rules) }
+        val o = fake.filters.count { it.personId == often.id }
+        val r = fake.filters.count { it.personId == rarely.id }
+        assertTrue("$o tirages pour « souvent », $r pour « rarement »", r > 0 && o > 2 * r)
+    }
+
+    @Test fun `a photo loved on the frame comes back now and then, but not within the no-repeat period`() {
+        val loved = photo("aimée")
+        val fake = Fake()
+        val rules = Rules(loved = listOf(loved), lovedShare = 20, repeatDays = 7)
+        val p = picker()
+        p.resetIfChanged(rules)
+        val first = (1..200).map { p.next(fake, rules).also { ph -> p.markSeen(listOf(ph)) }.id }
+        assertEquals("une seule fois dans la période", 1, first.count { it == "aimée" })
+        assertTrue(p.stats.loved == 1)
+        assertEquals("sans réglage, elle ne revient pas plus qu'une autre", 0,
+            picker().apply { resetIfChanged(Rules()) }.let { q -> (1..50).count { q.next(fake, Rules()).id == "aimée" } })
+    }
+
+    @Test fun `the counters only count photos that are actually shown`() {
+        val fake = Fake().apply { pastYears = listOf(photo("old1", yearsAgo = 5)) }
+        seen["old1"] = NOON / 86_400_000L
+        val rules = Rules(persons = tenPeople.take(1), memoryShare = 50, repeatDays = 7)
+        val p = picker()
+        p.resetIfChanged(rules)
+        p.next(fake, rules); later.runAll()
+        repeat(20) { assertTrue(p.next(fake, rules).id != "old1") }
+        assertEquals("le souvenir déjà vu cette semaine n'est ni montré ni compté", 0, p.stats.memories)
+    }
+
     @Test fun `hidden photos and screenshots are never shown`() {
         val fake = Fake(listOf(photo("hidden"), photo("shot", name = "Screenshot_2024.jpg"), photo("good")))
         hidden.add("hidden")

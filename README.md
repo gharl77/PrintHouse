@@ -18,6 +18,8 @@ page served by the tablet itself.
   never cropped.
 - **Sources** — people, albums and themes that add up, each with its share of the slideshow.
   Themes are found by content ("dog", "landscape") with Immich's smart search.
+  Themes can also be set aside ("screenshot", "document"), people shown more or less often, and
+  photos favourited from the frame come back now and then.
 - **On this day** — mixes in photos taken on today's date in past years.
 - **Birthdays and ages** — more photos of someone on their birthday, and their age at the time
   of the photo in the caption, from the birth dates in Immich.

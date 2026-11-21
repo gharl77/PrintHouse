@@ -188,6 +188,9 @@ class WebServer(private val app: App) {
                 fun redraw() { if (step == null) step = 0 }
                 if (req.has("sourceMode")) req.optString("sourceMode").let { if (it in setOf("all", "favorites")) { settings.sourceMode = it; step = 1 } }
                 if (req.has("albums")) { settings.albums = Choice.list(req.optJSONArray("albums")); step = 1 }
+                req.optJSONArray("excludeThemes")?.let { a -> settings.excludeThemes = (0 until a.length()).map { a.optString(it) }; step = 1 }
+                if (req.has("excludeSize")) { settings.excludeSize = req.optInt("excludeSize", 100).coerceIn(10, 1000); step = 1 }
+                if (req.has("lovedShare")) settings.lovedShare = req.optInt("lovedShare").coerceIn(0, 100)
                 req.optJSONArray("themes")?.let { a -> settings.themes = (0 until a.length()).map { a.optString(it) }; step = 1 }
                 for ((k, set) in listOf<Pair<String, (Int) -> Unit>>(
                     "personsWeight" to { v -> settings.personsWeight = v }, "themesWeight" to { v -> settings.themesWeight = v }, "albumsWeight" to { v -> settings.albumsWeight = v },
@@ -282,6 +285,7 @@ class WebServer(private val app: App) {
                 val id = req.optString("id")
                 if (!UUID.matches(id)) throw ImmichException("Requête invalide")
                 Immich.favorite(settings.server, id)
+                app.library.shown(id)?.let { app.library.love(it) }
                 JSONObject().put("ok", true)
             }
             // Pour vérifier la relance automatique après une erreur fatale.
@@ -367,6 +371,10 @@ class WebServer(private val app: App) {
         .put("sourceMode", settings.sourceMode)
         .put("albums", Choice.array(settings.albums))
         .put("themes", JSONArray(settings.themes))
+        .put("excludeThemes", JSONArray(settings.excludeThemes))
+        .put("excludeSize", settings.excludeSize)
+        .put("lovedShare", settings.lovedShare)
+        .put("lovedCount", app.library.lovedCount)
         .put("personsWeight", settings.personsWeight)
         .put("themesWeight", settings.themesWeight)
         .put("albumsWeight", settings.albumsWeight)
@@ -402,11 +410,12 @@ class WebServer(private val app: App) {
         .put("ageCaption", settings.ageCaption)
         .put("printStrength", settings.printStrength)
         .put("birthdaysToday", JSONArray(app.library.birthdaysToday))
+        .put("netLocks", app.reachable)
         .put("battery", app.battery)
         .put("charging", app.charging)
         .put("stats", app.library.stats.let {
             JSONObject().put("shown", it.shown).put("screenshots", it.screenshots).put("small", it.small).put("noCamera", it.noCamera)
-                .put("series", it.series).put("memories", it.memories).put("season", it.season).put("birthdays", it.birthdays)
+                .put("series", it.series).put("memories", it.memories).put("season", it.season).put("birthdays", it.birthdays).put("excluded", it.excluded).put("loved", it.loved)
         })
         .put("hiddenCount", app.library.hiddenCount)
         .put("cachedCount", app.library.cachedCount)

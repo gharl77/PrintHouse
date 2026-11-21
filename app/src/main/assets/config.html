@@ -82,6 +82,9 @@ h2{margin:0 0 10px;font-size:17px}
 .toks{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .tok{display:inline-flex;align-items:center;gap:7px;padding:3px 4px 3px 3px;border-radius:99px;background:var(--card2);border:1px solid var(--line);font-size:14px}
 .tok button{border:0;background:transparent;color:var(--mute);padding:0 7px 1px;font-size:17px;line-height:1;border-radius:99px}
+.tok button.who{padding:0;font-size:14px;color:var(--text);display:inline-flex;align-items:center;gap:6px}
+.tok button.who small{background:rgba(255,255,255,.1);border-radius:99px;padding:1px 8px;font-size:11px;color:var(--mute)}
+.tok button.who:hover{background:transparent;text-decoration:underline}
 .tok button:hover{color:var(--text);background:rgba(255,255,255,.08)}
 .toks .none{color:var(--mute);font-size:13px;padding:5px 0}
 .av{width:26px;height:26px;border-radius:50%;flex:none;display:inline-grid;place-items:center;font-size:12px;font-weight:600;background:#3a4558 center/cover no-repeat;color:var(--text)}
@@ -169,7 +172,7 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
   </section>
   <section class="card">
     <h2>Personnes</h2>
-    <p class="muted">Les photos où apparaît l'une de ces personnes.</p>
+    <p class="muted">Les photos où apparaît l'une de ces personnes. Touchez un nom pour la voir plus souvent ou plus rarement que les autres.</p>
     <div class="toks" id="personsToks"></div>
     <input id="personsQ" type="search" placeholder="Ajouter une personne…" aria-label="Rechercher une personne" autocomplete="off">
     <div class="sugs" id="personsSugs"></div>
@@ -200,6 +203,23 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
     </div>
     <p class="muted">Immich classe les photos de la plus à la moins ressemblante, sans dire où s'arrête le thème. Un nombre plus grand donne plus de variété, mais aussi plus d'intrus ; un double toucher sur le cadre écarte une photo qui n'a rien à faire là.</p>
     <p class="muted" id="themesInfo"></p>
+  </section>
+  <section class="card">
+    <h2>Thèmes à écarter</h2>
+    <p class="muted">L'inverse des thèmes : ce qu'Immich reconnaît comme « capture d'écran », « document », « reçu »… ne sort plus sur le cadre, d'où qu'il vienne. Rien n'est supprimé dans Immich.</p>
+    <div class="toks" id="excludeThemesToks"></div>
+    <div class="row">
+      <input id="excludeThemesQ" placeholder="Ajouter un thème à écarter…" aria-label="Ajouter un thème à écarter" autocomplete="off" maxlength="60" style="flex:1;width:auto">
+      <button id="excludeThemesAdd">Ajouter</button>
+    </div>
+    <div class="set">
+      <label class="f" for="excludeSize">Photos écartées par thème</label>
+      <select id="excludeSize">
+        <option value="50">Les 50 plus ressemblantes</option><option value="100">Les 100 plus ressemblantes</option>
+        <option value="200">Les 200 plus ressemblantes</option><option value="500">Les 500 plus ressemblantes</option>
+      </select>
+    </div>
+    <p class="muted">Immich renvoie toujours ce nombre de photos, même si peu correspondent vraiment : un nombre trop grand écarte aussi de vraies photos. Commencez petit.</p>
   </section>
   <section class="card">
     <h2>Albums</h2>
@@ -265,6 +285,12 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
       <select id="repeatDays">
         <option value="0">Sans importance</option><option value="3">3 jours</option><option value="7">1 semaine</option>
         <option value="14">2 semaines</option><option value="30">1 mois</option>
+      </select>
+    </div>
+    <div class="set">
+      <label class="f" for="lovedShare">Revoir les photos mises en favori depuis le cadre</label>
+      <select id="lovedShare">
+        <option value="0">Pas plus que les autres</option><option value="5">De temps en temps</option><option value="15">Souvent</option>
       </select>
     </div>
     <label class="check"><input type="checkbox" id="pairPortraits"> Regrouper deux photos verticales, ou trois carrées</label>
@@ -541,6 +567,7 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
   <section class="card">
     <h2>Mise à jour par fichier</h2>
     <p class="muted">Choisissez le fichier APK de la nouvelle version : il est envoyé à la tablette, qui demande une confirmation sur son écran. La première fois, il faut aussi y autoriser PrintHouse à installer des applications.</p>
+    <p class="muted">Sur beaucoup de tablettes, la protection de Google (Play Protect) refuse qu'une app se mette à jour elle-même : l'installation échoue alors avec « INSTALL_FAILED_VERIFICATION_FAILURE », ici comme avec le bouton Installer ci-dessus. Dans ce cas, branchez la tablette à un ordinateur et installez le fichier avec « adb install -r ».</p>
     <div class="row">
       <button id="apkBtn">Choisir un fichier APK…</button>
       <input type="file" id="apkFile" accept=".apk,application/vnd.android.package-archive" hidden>
@@ -684,7 +711,15 @@ function drawPicker(key) {
     x.setAttribute("aria-label", t("Retirer ") + item.name);
     x.onclick = () => save({[key]: S[key].filter(c => c.id !== item.id)});
     const tok = Object.assign(document.createElement("span"), {className: "tok"});
-    tok.append(avatar(item, cfg.faces), item.name || t("(sans nom)"), x);
+    if (key === "persons") {
+      // Toucher le nom fait tourner la fréquence : normale → souvent → rarement.
+      const w = item.weight || 2;
+      const name = Object.assign(document.createElement("button"), {className: "who", title: t("Changer la fréquence")});
+      name.append(item.name || t("(sans nom)"));
+      if (w !== 2) name.append(Object.assign(document.createElement("small"), {textContent: w === 4 ? t("souvent") : t("rarement")}));
+      name.onclick = () => save({persons: S.persons.map(c => c.id === item.id ? Object.assign({}, c, {weight: w === 2 ? 4 : (w === 4 ? 1 : 2)}) : c)});
+      tok.append(avatar(item, cfg.faces), name, x);
+    } else tok.append(avatar(item, cfg.faces), item.name || t("(sans nom)"), x);
     toks.append(tok);
   }
   // Suggestions : seulement pendant la recherche, pour que la page reste courte.
@@ -739,7 +774,10 @@ function setSelect(id, value) {
 
 function render() {
   $("sourceMode").value = S.sourceMode;
-  drawThemes();
+  drawThemes("themes");
+  drawThemes("excludeThemes");
+  setSelect("excludeSize", S.excludeSize);
+  setSelect("lovedShare", S.lovedShare);
   for (const id of ["personsWeight", "themesWeight", "albumsWeight"]) $(id).querySelectorAll("button").forEach(b => b.classList.toggle("on", Number(b.dataset.v) === S[id]));
   setSelect("themeSize", S.themeSize);
   $("themesInfo").textContent = S.themeError ? t("La recherche par contenu d'Immich ne répond pas : ") + S.themeError : "";
@@ -773,7 +811,7 @@ function render() {
   $("printStrength").value = S.printStrength;
   $("printStrengthOut").textContent = S.printStrength + " %";
   const st = S.stats, skipped = st.screenshots + st.small + st.noCamera;
-  $("statsInfo").textContent = t("Depuis le lancement : ") + st.shown + t(" photo(s) affichée(s), dont ") + st.memories + t(" souvenir(s), ") + st.season + t(" de saison et ") + st.birthdays + t(" d'anniversaire ; ") + st.series + t(" série(s) ; ") + skipped + t(" image(s) passée(s) par les filtres.");
+  $("statsInfo").textContent = t("Depuis le lancement : ") + st.shown + t(" photo(s) affichée(s), dont ") + st.memories + t(" souvenir(s), ") + st.season + t(" de saison et ") + st.birthdays + t(" d'anniversaire ; ") + st.series + t(" série(s) ; ") + (skipped + st.excluded) + t(" image(s) passée(s) par les filtres.") + (S.lovedCount ? " " + S.lovedCount + t(" photo(s) mise(s) en favori depuis le cadre.") : "");
   drawPreview();
   for (const id of ["skipScreenshots", "skipSmall", "skipNoCamera", "tabletLock"]) $(id).checked = S[id];
   $("language").value = S.language;
@@ -918,28 +956,32 @@ for (const id of ["personsWeight", "themesWeight", "albumsWeight"]) {
 }
 $("themeSize").addEventListener("change", () => save({themeSize: Number($("themeSize").value)}));
 
-// ---- Thèmes : des mots libres, cherchés par contenu dans Immich ----
-function drawThemes() {
-  const toks = $("themesToks");
+// ---- Thèmes : des mots libres, cherchés par contenu dans Immich (à montrer, ou à écarter) ----
+function drawThemes(key) {
+  const toks = $(key + "Toks");
   toks.textContent = "";
-  if (!S.themes.length) toks.append(Object.assign(document.createElement("span"), {className: "none", textContent: t("Aucun thème.")}));
-  for (const theme of S.themes) {
+  if (!S[key].length) toks.append(Object.assign(document.createElement("span"), {className: "none", textContent: t("Aucun thème.")}));
+  for (const theme of S[key]) {
     const x = Object.assign(document.createElement("button"), {textContent: "×", title: t("Retirer")});
     x.setAttribute("aria-label", t("Retirer ") + theme);
-    x.onclick = () => save({themes: S.themes.filter(v => v !== theme)});
+    x.onclick = () => save({[key]: S[key].filter(v => v !== theme)});
     const tok = Object.assign(document.createElement("span"), {className: "tok"});
     tok.append(Object.assign(document.createElement("span"), {className: "av sq", textContent: theme.charAt(0).toUpperCase()}), theme, x);
     toks.append(tok);
   }
 }
-function addTheme() {
-  const v = $("themesQ").value.trim();
-  if (!v) return;
-  $("themesQ").value = "";
-  if (!S.themes.some(x => x.toLowerCase() === v.toLowerCase())) save({themes: S.themes.concat([v])});
+for (const key of ["themes", "excludeThemes"]) {
+  const add = () => {
+    const v = $(key + "Q").value.trim();
+    if (!v) return;
+    $(key + "Q").value = "";
+    if (!S[key].some(x => x.toLowerCase() === v.toLowerCase())) save({[key]: S[key].concat([v])});
+  };
+  $(key + "Add").onclick = add;
+  $(key + "Q").addEventListener("keydown", e => { if (e.key === "Enter") add(); });
 }
-$("themesAdd").onclick = addTheme;
-$("themesQ").addEventListener("keydown", e => { if (e.key === "Enter") addTheme(); });
+$("excludeSize").addEventListener("change", () => save({excludeSize: Number($("excludeSize").value)}));
+$("lovedShare").addEventListener("change", () => save({lovedShare: Number($("lovedShare").value)}));
 
 async function step(n) {
   try {

@@ -2,6 +2,17 @@
 
 Versions are numbered year.month.number.
 
+## 2026.11.5
+
+- The settings page stays reachable: the frame now keeps the tablet's Wi-Fi from filtering the
+  network's broadcast messages, which left computers unable to find the tablet.
+- Themes to set aside: what Immich recognises as "screenshot", "document"… no longer shows.
+- People can be seen more or less often than the others: tap a name on the settings page.
+- Photos favourited from the frame come back now and then.
+- Update from the web page: a clear warning that Google Play Protect often refuses it, and what
+  to do instead.
+- Counters only count photos that were actually shown.
+
 ## 2026.11.4
 
 - Fixed a frame that stayed black for hours. Once the screen had gone off during the day for

@@ -29,6 +29,23 @@ class Library(ctx: Context, private val settings: Settings) {
         seen = seen,
         background = Executors.newSingleThreadExecutor { r -> Thread(r, "memories").apply { isDaemon = true } },
     )
+    private val lovedFile = File(ctx.filesDir, "loved.json")
+    @Volatile private var loved: List<Immich.Photo> = try {
+        org.json.JSONArray(lovedFile.readText()).let { a -> (0 until a.length()).map { Immich.Photo.from(a.getJSONObject(it)) } }
+    } catch (_: Exception) {
+        emptyList()
+    }
+    val lovedCount get() = loved.size
+
+    /** Une photo vient d'être mise en favori depuis le cadre : elle reviendra un peu plus souvent. */
+    @Synchronized fun love(photo: Immich.Photo) {
+        loved = (loved.filter { it.id != photo.id } + photo.copy(ages = "")).takeLast(LOVED_MAX)
+        try { lovedFile.writeText(org.json.JSONArray(loved.map { it.json().put("dateReliable", it.dateReliable) }).toString()) } catch (_: Exception) {}
+    }
+
+    /** Retrouve une photo montrée récemment par son identifiant. */
+    fun shown(id: String): Immich.Photo? = (current + recent(120)).firstOrNull { it.id == id }
+
     private val history = ArrayList<List<Immich.Photo>>()
     private var pos = -1
 
@@ -83,6 +100,8 @@ class Library(ctx: Context, private val settings: Settings) {
             sourceMode = settings.sourceMode, albums = settings.albums, persons = settings.persons,
             themes = settings.themes, personsWeight = settings.personsWeight, themesWeight = settings.themesWeight,
             albumsWeight = settings.albumsWeight, themeSize = settings.themeSize,
+            excludeThemes = settings.excludeThemes, excludeSize = settings.excludeSize,
+            loved = loved.filter { it.id !in hidden }, lovedShare = settings.lovedShare,
             sinceYears = settings.sinceYears, memoryShare = settings.memoryShare, seasonShare = settings.seasonShare,
             birthdayShare = settings.birthdayShare, seriesShare = settings.seriesShare, repeatDays = settings.repeatDays,
             ageCaption = settings.ageCaption, ageLimit = settings.ageLimit, skipScreenshots = settings.skipScreenshots,
@@ -222,6 +241,7 @@ class Library(ctx: Context, private val settings: Settings) {
         private const val SQUARE = 1
         private const val LANDSCAPE = 2
         private const val HISTORY_MAX = 60
+        private const val LOVED_MAX = 300
         private const val CACHE_MAX = 80
     }
 }

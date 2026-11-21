@@ -66,6 +66,7 @@ class App : Application() {
         settings = Settings(this)
         I18n.init(settings)
         events = EventLog(this)
+        stayReachable()
         events.add(tr("PrintHouse %s démarré").format(version))
         library = Library(this, settings)
         updater = Updater(this)
@@ -282,15 +283,32 @@ class App : Application() {
         if (keep && wakeLock == null) {
             wakeLock = getSystemService(PowerManager::class.java)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "printhouse:ha").apply { acquire() }
-            @Suppress("DEPRECATION")
-            wifiLock = (applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
-                .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "printhouse:ha").apply { acquire() }
         } else if (!keep) {
             wakeLock?.let { if (it.isHeld) it.release() }
-            wifiLock?.let { if (it.isHeld) it.release() }
             wakeLock = null
-            wifiLock = null
         }
+    }
+
+    private var multicastLock: WifiManager.MulticastLock? = null
+
+    /**
+     * La page de réglages doit répondre à tout moment. Sans ces deux verrous, le Wi-Fi de la
+     * tablette économise l'énergie et filtre les messages de diffusion du réseau, dont la question
+     * « qui a cette adresse ? » : un ordinateur ne trouve alors plus la tablette tant qu'elle ne
+     * lui a pas parlé la première. Le cadre est branché sur secteur, le coût est négligeable.
+     */
+    /**
+     * Les deux verrous réseau sont-ils tenus ? Montré sur la page web ; cette lecture garantit
+     * aussi que les verrous restent référencés : un verrou que plus rien ne référence est
+     * relâché par Android sans prévenir.
+     */
+    val reachable get() = wifiLock?.isHeld == true && multicastLock?.isHeld == true
+
+    private fun stayReachable() {
+        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        @Suppress("DEPRECATION")
+        wifiLock = wifi.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "printhouse:web").apply { setReferenceCounted(false); acquire() }
+        multicastLock = wifi.createMulticastLock("printhouse:web").apply { setReferenceCounted(false); acquire() }
     }
 
     companion object {

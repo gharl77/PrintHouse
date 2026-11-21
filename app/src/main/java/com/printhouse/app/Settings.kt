@@ -7,15 +7,20 @@ import java.util.Calendar
 import kotlin.reflect.KProperty
 
 /** Un album ou une personne choisis dans Immich. */
-data class Choice(val id: String, val name: String, val count: Int = 0) {
-    fun json(): JSONObject = JSONObject().put("id", id).put("name", name).put("count", count)
+data class Choice(
+    val id: String, val name: String, val count: Int = 0,
+    /** Pour une personne : 1 = rarement, 2 = normalement, 4 = souvent. */
+    val weight: Int = 2,
+) {
+    fun json(): JSONObject = JSONObject().put("id", id).put("name", name).put("count", count).put("weight", weight)
 
     companion object {
         private val ID = Regex("""^[0-9a-fA-F-]{36}$""")
         fun list(a: JSONArray?): List<Choice> = (0 until (a?.length() ?: 0)).mapNotNull { i ->
             val o = a!!.optJSONObject(i) ?: return@mapNotNull null
             val id = o.optString("id")
-            if (ID.matches(id)) Choice(id, o.optString("name").take(120), o.optInt("count")) else null
+            val weight = o.optInt("weight", 2).let { if (it in setOf(1, 2, 4)) it else 2 }
+            if (ID.matches(id)) Choice(id, o.optString("name").take(120), o.optInt("count"), weight) else null
         }
         fun array(l: List<Choice>) = JSONArray().apply { l.forEach { put(it.json()) } }
     }
@@ -67,6 +72,14 @@ class Settings(ctx: Context) {
     var themes: List<String>
         get() = try { JSONArray(p.getString("themes", "[]")).let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } } } catch (_: Exception) { emptyList() }
         set(v) = p.edit().putString("themes", JSONArray(v.map { it.trim().take(60) }.filter { it.isNotEmpty() }.distinct().take(12)).toString()).apply()
+    /** Thèmes à écarter : ce qu'Immich reconnaît comme « capture d'écran », « document »… ne sort plus. */
+    var excludeThemes: List<String>
+        get() = try { JSONArray(p.getString("excludeThemes", "[]")).let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } } } catch (_: Exception) { emptyList() }
+        set(v) = p.edit().putString("excludeThemes", JSONArray(v.map { it.trim().take(60) }.filter { it.isNotEmpty() }.distinct().take(12)).toString()).apply()
+    /** Nombre de photos écartées par thème à écarter. */
+    var excludeSize by Num("excludeSize", 100)
+    /** Chance (en %) de revoir une photo mise en favori depuis le cadre. */
+    var lovedShare by Num("lovedShare", 5)
     /** Poids de chaque liste : 1 = un peu, 2 = autant que les autres, 4 = beaucoup. */
     var personsWeight by Num("personsWeight", 2)
     var themesWeight by Num("themesWeight", 2)

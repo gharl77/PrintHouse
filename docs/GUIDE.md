@@ -78,7 +78,7 @@ mat. A small caption under the photo gives the place and the month.
 | --- | --- |
 | Tap, or swipe left | Next photo |
 | Swipe right | Previous photo (up to 60 back) |
-| Swipe up | Add the photo to Immich favourites |
+| Swipe up | Add the photo to Immich favourites; the frame will also bring it back now and then |
 | Swipe down | Show the photo's details for a few seconds |
 | Double tap | Set the photo aside: it will not come back |
 | Long press | Open the settings |
@@ -113,7 +113,8 @@ Every change is saved as you make it and applies to the frame right away. Sectio
 Three lists add up. A photo is shown if it matches any one of them; with all three empty, the
 frame draws from the whole library.
 
-- **People** — photos where one of these people appears. Needs `person.read`.
+- **People** — photos where one of these people appears. Needs `person.read`. Tap a name to see
+  that person **often** or **rarely** compared with the others; a third tap returns to normal.
 - **Themes** — photos recognised by their content: "dog", "landscape", "snow". A theme is a
   search, run by Immich's machine learning exactly as in Immich's own search box, so write it in
   the language your Immich understands best. Immich ranks photos from the closest to the least
@@ -132,6 +133,14 @@ to the last 1, 2, 5, 10 or 20 years.
 
 People and albums are chosen by typing a name and picking a suggestion; themes are typed
 freely. Each choice becomes a token you can remove.
+
+![People seen often or rarely, themes, and themes to set aside](screenshots/web-sources.png)
+
+**Themes to set aside** is the opposite list: what Immich recognises as "screenshot",
+"document", "receipt"… no longer shows on the frame, wherever it comes from. Nothing is deleted
+in Immich. Immich always returns the number of photos you ask for (50 to 500 per theme), even
+when few really match, so too large a number also sets aside real photos: start small. Each
+theme costs one request a day, made in the background.
 
 "On this day" memories and season photos follow your people and albums. With themes as the
 only list they are left out, because nothing can limit them to a theme.
@@ -155,6 +164,9 @@ These images stay in Immich; the frame just skips them.
   order they were taken, like turning the pages of an album.
 - **Season** — how often a photo from the same time of year (three weeks either side of today)
   in a past year is shown: winter in winter, summer in summer.
+- **See photos favourited from the frame again** — no more than the others, now and then, or
+  often. The frame remembers the last 300 photos you favourited with a swipe up or from the
+  settings page; favourites added in Immich itself are not concerned.
 - **Do not show a photo again for** — 3 days to 1 month. The frame remembers what it has shown
   and avoids it; if the filters leave nothing else, it shows a recent photo rather than nothing.
 - **Group two portrait photos, or three square ones** — in the same mat, each with its
@@ -193,7 +205,7 @@ in Home Assistant when MQTT is enabled.
 - how many photos are kept on the tablet — the last 80 shown are stored locally so the frame
   keeps going when Immich is unreachable;
 - counters since the app started: photos shown, memories, seasonal and birthday photos, series,
-  and images skipped by the filters;
+  favourites shown again, and images skipped by the filters or set aside by theme;
 - **Latest photos shown** — the last twelve, each with **Favourite** and **Set aside** buttons,
   so you can act on a photo you saw go by without walking to the frame.
 
@@ -292,6 +304,34 @@ automation:
           option: Memories only
 ```
 
+To be told when the frame stops, watch the **Current photo** image: it changes with every
+photo. This automation sends a notification when it has not changed for 15 minutes during the
+day, unless the screen was turned off on purpose (adjust the hours to your night settings):
+
+```yaml
+automation:
+  - alias: PrintHouse stopped changing photos
+    triggers:
+      - trigger: state
+        entity_id: image.printhouse_current_photo
+        for:
+          minutes: 15
+    conditions:
+      - condition: time
+        after: "08:30:00"
+        before: "21:45:00"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: switch.printhouse_screen
+            state: "off"
+    actions:
+      - action: notify.mobile_app_your_phone
+        data:
+          title: PrintHouse
+          message: The frame has not changed photo for 15 minutes.
+```
+
 A frame is plugged in all year, which wears a battery kept at 100 %. With the battery sensor
 and a smart plug you can let Home Assistant charge the tablet only between, say, 40 % and 80 %.
 
@@ -387,7 +427,7 @@ with `adb install -r`, which Play Protect does not block.
 | The update fails with `INSTALL_FAILED_VERIFICATION_FAILURE` | Google Play Protect blocked it. Install the APK over USB with `adb install -r` |
 | The frame was black during the day | The **Log** shows "Screen turned off by the tablet, not by the frame" with the time; the frame turns it back on by itself |
 | The update asks to "allow from this source" | Normal the first time: allow it on the tablet, then send the file again |
-| The settings page does not open | PrintHouse must be running; check the address in the tablet's settings screen. The address can change if your router does not reserve it |
+| The settings page does not open | PrintHouse must be running; check the address in the tablet's settings screen. The address can change if your router does not reserve it. Some tablets stop answering computers that look for them once their Wi-Fi goes quiet; PrintHouse holds the Wi-Fi fully awake to prevent it (version 2026.11.5 and later) |
 
 ## How the print look is made
 

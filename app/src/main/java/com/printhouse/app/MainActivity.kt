@@ -158,6 +158,7 @@ class MainActivity : Activity() {
         side.execute {
             val msg = try {
                 Immich.favorite(server, photo.id)
+                app.library.love(photo)
                 tr("Ajoutée aux favoris d'Immich.")
             } catch (e: ImmichException) {
                 if (e.message?.contains("403") == true) tr("Pour ajouter aux favoris, donnez la permission asset.update à la clé API.")
