@@ -294,6 +294,26 @@ class Picker(
         return withAges(src, rules, found)
     }
 
+    /**
+     * Jusqu'à [max] autres photos de la même journée que [first], dans l'ordre où elles ont été
+     * prises, pour une page d'album ou une planche-contact. Vide si elle était seule ce jour-là.
+     */
+    fun together(src: PhotoSource, rules: Rules, first: Immich.Photo, max: Int): List<Immich.Photo> {
+        val out = ArrayList<Immich.Photo>()
+        while (out.size < max) { // une série déjà commencée se retrouve réunie sur la page
+            val p = series.pollFirst() ?: break
+            if (acceptable(p, rules, allowSeen = true)) out.add(p)
+        }
+        if (out.isNotEmpty()) return out
+        return try {
+            val day = src.sameDay(first).filter { it.id == first.id || acceptable(it, rules, allowSeen = true) }
+            val at = day.indexOfFirst { it.id == first.id }
+            if (at < 0) emptyList() else (day.drop(at + 1) + day.take(at)).take(max).also { if (it.isNotEmpty()) stats.series++ }
+        } catch (_: ImmichException) {
+            emptyList()
+        }
+    }
+
     /** Remet en tête de file une compagne qui n'a finalement pas servi. */
     fun giveBack(p: Immich.Photo) = queue.addFirst(p)
 

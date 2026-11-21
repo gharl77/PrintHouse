@@ -131,7 +131,7 @@ class Library(ctx: Context, private val settings: Settings) {
         if (target < history.size) {
             val photos = history[target]
             val page = try {
-                Page(photos, photos.map { load(server, it) }, false)
+                Page(photos, photos.map { shrink(load(server, it), photos.size) }, false)
             } catch (e: ImmichException) {
                 if (!e.offline) throw e
                 offlinePage() ?: throw e
@@ -163,6 +163,16 @@ class Library(ctx: Context, private val settings: Settings) {
         val first = picker.next(src, rules)
         val photos = arrayListOf(first)
         val bitmaps = arrayListOf(load(server, first))
+        // Page d'album ou planche-contact : les photos de la même journée y sont réunies.
+        val room = Looks.seriesSize(settings.look(first.id).frame)
+        if (room > 1) {
+            for (p in picker.together(src, rules, first, room - 1)) {
+                val bmp = try { load(server, p) } catch (_: ImmichException) { null } ?: continue
+                photos.add(p)
+                bitmaps.add(bmp)
+            }
+            if (photos.size > 1) return Page(photos, bitmaps.map { shrink(it, photos.size) }, false)
+        }
         if (settings.pairPortraits) {
             val shape = shapeOf(bitmaps[0])
             val wanted = when (shape) { PORTRAIT -> 2; SQUARE -> 3; else -> 1 }
@@ -180,6 +190,15 @@ class Library(ctx: Context, private val settings: Settings) {
             }
         }
         return Page(photos, bitmaps, false)
+    }
+
+    /** À plus de trois sur une page, chaque photo est petite : inutile de garder toute sa définition. */
+    private fun shrink(b: Bitmap, onPage: Int): Bitmap {
+        val side = maxOf(b.width, b.height)
+        if (onPage <= 3 || side <= MANY_MAX) return b
+        val small = Bitmap.createScaledBitmap(b, b.width * MANY_MAX / side, b.height * MANY_MAX / side, true)
+        if (small !== b) b.recycle()
+        return small
     }
 
     private fun shapeOf(b: Bitmap): Int {
@@ -243,5 +262,6 @@ class Library(ctx: Context, private val settings: Settings) {
         private const val HISTORY_MAX = 60
         private const val LOVED_MAX = 300
         private const val CACHE_MAX = 80
+        private const val MANY_MAX = 900 // plus grand côté d'une photo quand la page en réunit plus de trois
     }
 }

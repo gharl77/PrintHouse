@@ -233,6 +233,18 @@ class WebServer(private val app: App) {
                 if (req.has("night")) settings.night = req.optBoolean("night")
                 if (req.has("nightFrom")) settings.nightFrom = req.optString("nightFrom").trim()
                 if (req.has("nightTo")) settings.nightTo = req.optString("nightTo").trim()
+                var light = false
+                for ((key, allowed) in listOf("frameStyles" to Looks.FRAMES, "papers" to Looks.PAPERS, "tones" to Looks.TONES, "captionStyles" to Looks.CAPTIONS)) {
+                    if (!req.has(key)) continue
+                    val v = Looks.clean(req.optString(key), allowed).joinToString(",")
+                    when (key) { "frameStyles" -> settings.frameStyles = v; "papers" -> settings.papers = v; "tones" -> settings.tones = v; else -> settings.captionStyles = v }
+                    // Un autre choix de cadres change aussi le nombre de photos par page : page suivante.
+                    if (key == "frameStyles") step = 1 else redraw()
+                }
+                if (req.has("lightMode")) { settings.lightMode = if (req.optString("lightMode") == "room") "room" else "clock"; light = true }
+                if (req.has("luxEntity")) req.optString("luxEntity").trim().let { if (it.isEmpty() || ENTITY.matches(it)) { settings.luxEntity = it; light = true } }
+                if (req.has("warmLight")) settings.warmLight = req.optBoolean("warmLight")
+                if (light) app.ha.restart()
                 if (req.has("autoBrightness")) settings.autoBrightness = req.optBoolean("autoBrightness")
                 if (req.has("dayBrightness")) settings.dayBrightness = req.optInt("dayBrightness").coerceIn(1, 100)
                 if (req.has("eveningBrightness")) settings.eveningBrightness = req.optInt("eveningBrightness").coerceIn(1, 100)
@@ -243,6 +255,11 @@ class WebServer(private val app: App) {
             }
             "GET /api/ha/entities" -> try {
                 ok(JSONObject().put("entities", app.ha.entities()))
+            } catch (e: Exception) {
+                Reply(502, JSON, err(e.message ?: "Home Assistant injoignable"))
+            }
+            "GET /api/ha/lights" -> try {
+                ok(JSONObject().put("entities", app.ha.lightEntities()))
             } catch (e: Exception) {
                 Reply(502, JSON, err(e.message ?: "Home Assistant injoignable"))
             }
@@ -433,7 +450,11 @@ class WebServer(private val app: App) {
         .put("eveningBrightness", settings.eveningBrightness)
         .put("eveningFrom", settings.eveningFrom)
         .put("morningFrom", settings.morningFrom)
-        .put("brightnessNow", settings.brightnessNow()?.let { Math.round(it * 100) } ?: -1)
+        .put("brightnessNow", settings.brightnessNow(app.ha.lux)?.let { Math.round(it * 100) } ?: -1)
+        .put("frameStyles", settings.frameStyles).put("papers", settings.papers).put("tones", settings.tones).put("captionStyles", settings.captionStyles)
+        .put("lightMode", settings.lightMode).put("luxEntity", settings.luxEntity).put("warmLight", settings.warmLight)
+        .put("lux", app.ha.lux?.let { Math.round(it) } ?: -1).put("lightError", app.ha.lightError ?: "")
+        .put("warmthNow", Math.round(settings.warmthNow(app.ha.lux) * 100))
         .put("ha", JSONObject()
             .put("enabled", settings.haEnabled)
             .put("url", settings.haUrl)

@@ -116,6 +116,8 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
 .set input[type=range]{padding:0;border:0;background:transparent}
 .set output{flex:none;width:44px;text-align:right;color:var(--mute);font-size:13px}
 .seg{display:flex;gap:6px}
+.seg.multi{flex-wrap:wrap;justify-content:flex-end}
+.set.wrap{align-items:flex-start}
 .seg.weight button{padding:6px 10px;font-size:13px}
 .seg button.on{background:#f2f2f7;color:#1c1c1e;font-weight:600;border-color:transparent}
 </style>
@@ -347,7 +349,28 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
 
 <main class="panel" data-panel="look" hidden>
   <section class="card">
-    <h2>Passe-partout</h2>
+    <h2>Style des tirages</h2>
+    <p class="muted">Touchez un ou plusieurs choix par ligne. Avec plusieurs, le cadre en prend un au hasard à chaque page.</p>
+    <div class="set wrap">
+      <label class="f">Cadre</label>
+      <div class="seg multi" id="frameStyles"><button data-v="mat">Passe-partout</button><button data-v="border">Marge blanche</button><button data-v="instant">Instantané</button><button data-v="gallery">Cadre de galerie</button><button data-v="album">Page d'album</button><button data-v="contact">Planche-contact</button></div>
+    </div>
+    <div class="set wrap">
+      <label class="f">Papier</label>
+      <div class="seg multi" id="papers"><button data-v="matte">Mat</button><button data-v="baryta">Baryté</button><button data-v="cotton">Coton</button></div>
+    </div>
+    <div class="set wrap">
+      <label class="f">Ton</label>
+      <div class="seg multi" id="tones"><button data-v="color">Couleur</button><button data-v="bw">Noir et blanc</button><button data-v="sepia">Sépia</button></div>
+    </div>
+    <div class="set wrap">
+      <label class="f">Légende</label>
+      <div class="seg multi" id="captionStyles"><button data-v="print">Imprimée</button><button data-v="hand">Manuscrite</button></div>
+    </div>
+    <p class="muted">La page d'album et la planche-contact réunissent les photos d'une même journée : jusqu'à trois tirages sur la page d'album, trois à six vues sur la planche-contact. Une photo seule ce jour-là prend un autre des cadres choisis. La couleur, choisie avec d'autres tons, garde une page sur deux. Le baryté a des noirs profonds, le coton est doux, chaud et texturé.</p>
+  </section>
+  <section class="card">
+    <h2>Fond et marge</h2>
     <div class="set">
       <label class="f">Couleur du carton</label>
       <div class="seg" id="matColor"><button data-v="black">Noir</button><button data-v="cream">Crème</button></div>
@@ -361,15 +384,25 @@ h3.sub{margin:18px 0 4px;font-size:14px;color:var(--mute);font-weight:600}
       <input id="printStrength" type="range" min="0" max="100" step="5"><output id="printStrengthOut"></output>
     </div>
     <p class="muted">À 100 %, un tirage très mat : noirs relevés, blancs couleur papier, grain. À 0 %, la photo telle qu'elle est dans Immich.</p>
-    <p class="muted">Le noir se confond avec le tour de la tablette. Le crème est texturé, comme un carton d'encadrement. Le changement se voit tout de suite sur le cadre.</p>
+    <p class="muted">Le noir se confond avec le tour de la tablette. Le crème est texturé, comme un carton d'encadrement ; la page d'album est alors en kraft. Le changement se voit tout de suite sur le cadre.</p>
   </section>
 </main>
 
 <main class="panel" data-panel="screen" hidden>
   <section class="card">
-    <h2>Luminosité selon l'heure</h2>
-    <p class="muted">Pleine le jour, plus basse le soir, avec un passage progressif d'une demi-heure. Un écran doux dans une pièce sombre ressemble davantage à un tirage.</p>
-    <label class="check"><input type="checkbox" id="autoBrightness"> Régler la luminosité selon l'heure</label>
+    <h2>Lumière</h2>
+    <p class="muted">Un tirage n'émet pas de lumière : il prend celle de la pièce. Pleine le jour, plus basse le soir, l'écran ressemble davantage à du papier.</p>
+    <label class="check"><input type="checkbox" id="autoBrightness"> Régler la luminosité automatiquement</label>
+    <div class="set">
+      <label class="f" for="lightMode">Suivre</label>
+      <select id="lightMode"><option value="clock">L'heure</option><option value="room">La lumière de la pièce</option></select>
+    </div>
+    <div class="set" id="luxRow">
+      <label class="f" for="luxEntity">Capteur d'éclairement</label>
+      <select id="luxEntity"><option value="">Choisir un capteur…</option></select>
+    </div>
+    <p class="muted" id="luxInfo"></p>
+    <label class="check"><input type="checkbox" id="warmLight"> Blanc plus chaud quand la lumière baisse</label>
     <div class="set">
       <label class="f" for="dayBrightness">Le jour</label>
       <input id="dayBrightness" type="range" min="5" max="100" step="5"><output id="dayBrightnessOut"></output>
@@ -760,6 +793,7 @@ function hhmm(v) {
 }
 // Champs enregistrés par un bouton : ce qui est tapé mais pas encore enregistré n'est jamais
 // écrasé par un rafraîchissement de la page (l'état est relu toutes les 5 secondes).
+const MULTI = ["frameStyles", "papers", "tones", "captionStyles"];
 const TYPED = ["url", "haUrl", "haEntity", "mqttHost", "mqttPort", "mqttUser", "devName", "updateRepo"];
 const dirty = new Set();
 for (const id of TYPED) $(id).addEventListener("input", () => dirty.add(id));
@@ -826,7 +860,17 @@ function render() {
   drawHidden();
   $("cacheInfo").textContent = S.cachedCount + t(" photo(s) gardée(s) sur la tablette, pour continuer à défiler si Immich est injoignable.");
   for (const id of ["matColor", "marginSize"]) $(id).querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === S[id]));
+  for (const id of MULTI) { const on = S[id].split(","); $(id).querySelectorAll("button").forEach(b => { b.classList.toggle("on", on.includes(b.dataset.v)); b.setAttribute("aria-pressed", on.includes(b.dataset.v)); }); }
   $("autoBrightness").checked = S.autoBrightness;
+  $("warmLight").checked = S.warmLight;
+  setSelect("lightMode", S.lightMode);
+  if (document.activeElement !== $("luxEntity")) { if (S.luxEntity) setSelect("luxEntity", S.luxEntity); else $("luxEntity").value = ""; }
+  $("luxRow").hidden = S.lightMode !== "room";
+  $("luxInfo").textContent = S.lightMode !== "room" ? "" :
+    !S.ha.tokenSet ? t("Reliez d'abord le cadre à Home Assistant, dans la section Home Assistant.") :
+    S.lightError ? S.lightError + " " + t("En attendant, la luminosité suit l'heure.") :
+    S.lux >= 0 ? t("Dans la pièce en ce moment : ") + S.lux + " lux." :
+    S.luxEntity ? t("En attente de la première mesure…") : t("Choisissez un capteur d'éclairement de la pièce où se trouve le cadre.");
   for (const id of ["dayBrightness", "eveningBrightness"]) { $(id).value = S[id]; $(id + "Out").textContent = S[id] + " %"; }
   $("morningFrom").value = hhmm(S.morningFrom);
   $("eveningFrom").value = hhmm(S.eveningFrom);
@@ -917,6 +961,7 @@ async function load() {
   await checkImmich();
   if (!document.querySelector('[data-panel="log"]').hidden) drawLog();
   if (S.ha.url && S.ha.tokenSet) loadHaEntities().catch(() => {});
+  if (S.ha.url && S.ha.tokenSet) loadLights().catch(() => {});
 }
 // L'état du capteur de présence est relu tant que l'onglet Home Assistant est ouvert.
 // L'état est relu tant que l'onglet Photos (aperçu) ou Home Assistant (présence) est ouvert.
@@ -950,6 +995,30 @@ for (const id of ["guestMode", "weekendNight", "motionWake", "pairPortraits", "c
 }
 for (const id of ["matColor", "marginSize"]) {
   $(id).querySelectorAll("button").forEach(b => { b.onclick = () => save({[id]: b.dataset.v}); });
+}
+// Choix multiples : chaque bouton s'allume ou s'éteint ; le dernier allumé ne s'éteint pas.
+for (const id of MULTI) {
+  $(id).querySelectorAll("button").forEach(b => { b.onclick = () => {
+    const on = new Set(S[id].split(","));
+    if (on.has(b.dataset.v)) { if (on.size > 1) on.delete(b.dataset.v); } else on.add(b.dataset.v);
+    save({[id]: [...on].join(",")});
+  }; });
+}
+$("warmLight").addEventListener("change", () => save({warmLight: $("warmLight").checked}));
+$("lightMode").addEventListener("change", () => { save({lightMode: $("lightMode").value}); loadLights(); });
+$("luxEntity").addEventListener("change", () => save({luxEntity: $("luxEntity").value}));
+/** Charge les capteurs d'éclairement de Home Assistant dans la liste. */
+async function loadLights() {
+  if (!S.ha || !S.ha.tokenSet) return;
+  try {
+    const j = await api("GET", "/api/ha/lights");
+    const sel = $("luxEntity");
+    const keep = sel.value || S.luxEntity;
+    sel.textContent = "";
+    sel.append(new Option(t("Choisir un capteur…"), ""));
+    for (const e of j.entities) sel.append(new Option(e.name + " — " + e.state + " lux", e.id));
+    if (keep) setSelect("luxEntity", keep);
+  } catch (e) { if (e.message === "pin") throw e; }
 }
 for (const id of ["personsWeight", "themesWeight", "albumsWeight"]) {
   $(id).querySelectorAll("button").forEach(b => { b.onclick = () => save({[id]: Number(b.dataset.v)}); });

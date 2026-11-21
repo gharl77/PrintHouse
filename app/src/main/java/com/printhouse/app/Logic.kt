@@ -21,6 +21,16 @@ object Logic {
     }
 
     /**
+     * Part de « plein jour » (0 à 1) pour un éclairement en lux. L'œil juge la lumière sur une
+     * échelle logarithmique : 0 sous 5 lux (une veilleuse), 1 dès 300 lux (une pièce de jour).
+     */
+    fun luxLevel(lux: Float): Float {
+        val lo = Math.log10(5.0)
+        val hi = Math.log10(300.0)
+        return ((Math.log10(lux.coerceAtLeast(1f).toDouble()) - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f)
+    }
+
+    /**
      * Est-ce la nuit à la minute [minute] du jour [day] (1 = lundi … 7 = dimanche) ? Les heures
      * [week] (début, fin) valent pour toutes les nuits ; [weekend], s'il est donné, pour celles qui
      * commencent le vendredi et le samedi. Une nuit peut enjamber minuit.

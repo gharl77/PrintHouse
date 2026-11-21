@@ -32,7 +32,15 @@ class HaLink(private val app: App) {
     @Volatile var absentMinutes = 0
         private set
 
-    val active get() = s.haEnabled && s.haUrl.isNotEmpty() && s.haToken.isNotEmpty() && s.presenceEntity.isNotEmpty()
+    private val linked get() = s.haUrl.isNotEmpty() && s.haToken.isNotEmpty()
+    val active get() = s.haEnabled && linked && s.presenceEntity.isNotEmpty()
+    /** La luminosité suit un capteur d'éclairement de la pièce. */
+    val lightActive get() = s.lightMode == "room" && linked && s.luxEntity.isNotEmpty()
+    /** Éclairement de la pièce, en lux, lissé ; null tant que le capteur n'a pas répondu. */
+    @Volatile var lux: Float? = null
+        private set
+    @Volatile var lightError: String? = null
+        private set
 
     /** (Re)démarre la surveillance selon les réglages ; à appeler après tout changement. */
     fun restart() {
@@ -43,8 +51,11 @@ class HaLink(private val app: App) {
         lastState = ""
         error = null
         absentMinutes = 0
-        if (!on) {
-            main.post { if (app.presenceOff) app.setPresenceScreen(true) }
+        lux = null
+        lightError = null
+        if (!on) main.post { if (app.presenceOff) app.setPresenceScreen(true) }
+        if (!on && !lightActive) {
+            main.post { app.lightChanged() }
             return
         }
         Thread({ loop(my) }, "ha-presence").apply { isDaemon = true; start() }
@@ -52,9 +63,19 @@ class HaLink(private val app: App) {
 
     private fun loop(my: Int) {
         var absentSince = 0L
+        var lightAt = 0L
+        val presence = active
         while (my == gen) {
             val now = SystemClock.elapsedRealtime()
             if (reset) { reset = false; absentSince = 0L }
+            if (lightActive && (lightAt == 0L || now - lightAt >= LIGHT_EVERY_MS)) {
+                lightAt = now
+                readLight(my)
+            }
+            if (!presence) {
+                try { Thread.sleep(LIGHT_EVERY_MS) } catch (_: InterruptedException) { return }
+                continue
+            }
             try {
                 val state = JSONObject(get("/api/states/" + s.presenceEntity)).optString("state")
                 if (my != gen) return
@@ -86,6 +107,38 @@ class HaLink(private val app: App) {
             }
             try { Thread.sleep(Logic.presencePollMs(s.isNightNow(), app.screenOff)) } catch (_: InterruptedException) { return }
         }
+    }
+
+    /** Lit l'éclairement ; les sauts sont adoucis pour que l'écran ne « pompe » pas. */
+    private fun readLight(my: Int) {
+        try {
+            val o = JSONObject(get("/api/states/" + s.luxEntity))
+            val v = o.optString("state").toFloatOrNull() ?: throw IOException(tr("Le capteur d'éclairement ne donne pas de valeur."))
+            if (my != gen) return
+            lux = lux?.let { it * 0.5f + v * 0.5f } ?: v
+            lightError = null
+        } catch (e: Exception) {
+            if (my != gen) return
+            if (lightError == null) app.events.add("Home Assistant : " + (e.message ?: e.javaClass.simpleName))
+            lightError = e.message ?: e.javaClass.simpleName
+            lux = null // sans mesure, la luminosité suit l'heure
+        }
+        main.post { if (my == gen) app.lightChanged() }
+    }
+
+    /** Capteurs d'éclairement (en lux) : [{id, name, state}], triés par nom. */
+    fun lightEntities(): JSONArray {
+        val all = JSONArray(get("/api/states"))
+        val rows = ArrayList<JSONObject>()
+        for (i in 0 until all.length()) {
+            val o = all.getJSONObject(i)
+            val id = o.optString("entity_id")
+            val a = o.optJSONObject("attributes")
+            if (!id.startsWith("sensor.") || (a?.optString("device_class") != "illuminance" && a?.optString("unit_of_measurement") != "lx")) continue
+            rows.add(JSONObject().put("id", id).put("name", a?.optString("friendly_name").orEmpty().ifEmpty { id }).put("state", o.optString("state")))
+        }
+        rows.sortBy { it.optString("name").lowercase() }
+        return JSONArray(rows)
     }
 
     private fun get(path: String): String {
@@ -129,6 +182,7 @@ class HaLink(private val app: App) {
 
     companion object {
         /** États qui veulent dire « personne » ; tout autre état (y compris inconnu) garde l'écran allumé. */
+        private const val LIGHT_EVERY_MS = 30_000L
         private val ABSENT = setOf("off", "not_home")
         private val DOMAINS = setOf("binary_sensor", "person", "device_tracker", "input_boolean", "group")
     }

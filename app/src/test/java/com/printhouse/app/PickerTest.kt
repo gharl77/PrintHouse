@@ -418,4 +418,18 @@ class PickerTest {
         assertTrue(fake.randomCalls - before <= 1)
         assertNull(picker().apply { resetIfChanged(rules) }.partner(Fake(listOf(photo("wide"))), rules, portrait = true, exclude = emptySet()))
     }
+
+    @Test fun `an album page gathers the other photos of the same day, in order`() {
+        val day = (1..5).map { photo("d$it") }
+        val src = object : PhotoSource by Fake() { override fun sameDay(p: Immich.Photo) = day }
+        val p = picker()
+        assertEquals(listOf("d4", "d5"), p.together(src, Rules(), day[2], 2).map { it.id })
+        assertEquals(listOf("d2", "d3", "d4", "d5"), p.together(src, Rules(), day[0], 5).map { it.id })
+        // La dernière de la journée est complétée par celles d'avant.
+        assertEquals(listOf("d1", "d2"), p.together(src, Rules(), day[4], 2).map { it.id })
+    }
+
+    @Test fun `a photo alone that day gathers nothing`() {
+        assertEquals(emptyList<Immich.Photo>(), picker().together(Fake(), Rules(), photo("solo"), 5))
+    }
 }

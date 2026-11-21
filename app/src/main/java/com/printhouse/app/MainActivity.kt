@@ -241,7 +241,8 @@ class MainActivity : Activity() {
         if (wasDark != dark) app.events.add(if (dark) tr("Écran éteint") + " : " + (app.darkReason() ?: "") else tr("Écran rallumé"))
         wasDark = dark
         val lp = window.attributes
-        val wanted = if (dark) 0.01f else settings.brightnessNow() ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        val wanted = if (dark) 0.01f else settings.brightnessNow(app.ha.lux) ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        view.setWarmth(if (dark) 0f else settings.warmthNow(app.ha.lux))
         if (abs(lp.screenBrightness - wanted) > 0.004f) {
             lp.screenBrightness = wanted
             window.attributes = lp
@@ -341,7 +342,9 @@ class MainActivity : Activity() {
                 val r = renderer?.takeIf { it.w == w && it.h == h && it.dark == dark && it.marginVmin == margin && it.strength == strength }
                     ?: PrintRenderer(w, h, dark, margin, strength).also { renderer = it }
                 val captions = page.photos.map { if (withCaption) it.caption() else "" }
-                val frame = r.compose(page.bitmaps, captions)
+                val look = Looks.settle(settings.look(page.photos[0].id), settings.frameList, page.photos.size)
+                val frame = r.compose(page.bitmaps, captions, look)
+                val ground = r.ground(look.frame)
                 page.bitmaps.forEach { it.recycle() }
                 val label = page.photos.map { it.caption() }.filter { it.isNotEmpty() }.joinToString(" | ")
                 // Pour la page web et Home Assistant : la même image, réduite, en JPEG.
@@ -354,7 +357,7 @@ class MainActivity : Activity() {
                 if (took >= SLOW_SECONDS) app.events.add(tr("Photo lente à arriver : %d s").format(took))
                 if (page.offline) app.events.add(tr("Immich injoignable : photos de la réserve"))
                 main.post {
-                    view.show(frame, r, if (quick) FrameView.QUICK_FADE_MS else FrameView.FADE_MS) { done() }
+                    view.show(frame, ground, if (quick) FrameView.QUICK_FADE_MS else FrameView.FADE_MS) { done() }
                     app.photoShown(label, jpeg)
                     if (page.offline) view.flash(tr("Immich est injoignable : photos gardées sur la tablette."))
                 }

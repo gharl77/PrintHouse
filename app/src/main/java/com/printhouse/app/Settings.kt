@@ -130,6 +130,14 @@ class Settings(ctx: Context) {
     /** Intensité du rendu « tirage papier », de 0 (photo d'origine) à 100 (tirage très mat). */
     var printStrength by Num("printStrength", 100)
     val matDark get() = matColor != "cream"
+    /** Cadres, papiers, tons et écritures choisis ("a,b,c") : plusieurs = un au hasard par page. */
+    var frameStyles by Str("frameStyles", "mat")
+    var papers by Str("papers", "matte")
+    var tones by Str("tones", "color")
+    var captionStyles by Str("captionStyles", "print")
+    val frameList get() = Looks.clean(frameStyles, Looks.FRAMES)
+    /** L'allure de la page qui commence par la photo [id]. */
+    fun look(id: String) = Looks.pick(frameList, Looks.clean(papers, Looks.PAPERS), Looks.clean(tones, Looks.TONES), Looks.clean(captionStyles, Looks.CAPTIONS), id.hashCode())
     val marginVmin get() = when (marginSize) { "small" -> 3.5f; "large" -> 9f; else -> 5.5f }
 
     // --- Écran
@@ -143,6 +151,11 @@ class Settings(ctx: Context) {
     /** Rallumer le cadre quand la caméra frontale voit un mouvement (désactivé au départ). */
     var motionWake by Flag("motionWake", false)
     var autoBrightness by Flag("autoBrightness", true)
+    /** D'où vient la luminosité : "clock" (l'heure) ou "room" (un capteur d'éclairement de Home Assistant). */
+    var lightMode by Str("lightMode", "clock")
+    var luxEntity by Str("luxEntity", "")
+    /** Blanc plus chaud quand la lumière baisse, comme un tirage sous les lampes du soir. */
+    var warmLight by Flag("warmLight", false)
     var dayBrightness by Num("dayBrightness", 80)
     var eveningBrightness by Num("eveningBrightness", 25)
     var eveningFrom by Str("eveningFrom", "19:30")
@@ -276,12 +289,27 @@ class Settings(ctx: Context) {
      * Luminosité voulue maintenant (0,01 à 1), ou null pour laisser celle de la tablette.
      * Pleine le jour, basse le soir, avec un passage progressif d'une demi-heure.
      */
-    fun brightnessNow(): Float? {
+    fun brightnessNow(lux: Float? = null): Float? {
         if (!autoBrightness) return null
+        val level = lightLevel(lux) ?: return null
+        val day = dayBrightness.coerceIn(1, 100) / 100f
+        val eve = eveningBrightness.coerceIn(1, 100) / 100f
+        return (eve + (day - eve) * level).coerceIn(0.01f, 1f)
+    }
+
+    /**
+     * Part de « plein jour » dans la lumière du moment, de 0 (soir) à 1 : mesurée dans la pièce
+     * ([lux], si le réglage le demande et que le capteur répond), sinon d'après l'heure.
+     */
+    fun lightLevel(lux: Float?): Float? {
+        if (lightMode == "room" && lux != null) return Logic.luxLevel(lux)
         val m = minutes(morningFrom) ?: return null
         val e = minutes(eveningFrom) ?: return null
-        return Logic.brightness(nowMinutes(), m, e, dayBrightness.coerceIn(1, 100) / 100f, eveningBrightness.coerceIn(1, 100) / 100f)
+        return ((Logic.brightness(nowMinutes(), m, e, 1f, 0.01f) - 0.01f) / 0.99f).coerceIn(0f, 1f)
     }
+
+    /** Chaleur du blanc maintenant, de 0 (jour) à 1 (soir) ; 0 si le réglage est éteint. */
+    fun warmthNow(lux: Float?): Float = if (!warmLight) 0f else 1f - (lightLevel(lux) ?: 1f)
 
     companion object {
         private val SECRETS = setOf("key", "pin", "haToken", "mqttPass")

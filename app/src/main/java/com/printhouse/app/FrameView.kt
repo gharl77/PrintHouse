@@ -26,6 +26,8 @@ class FrameView(ctx: Context) : View(ctx) {
     private var frame: Bitmap? = null
     private var frameAlpha = 0f
     private var nightAlpha = 0f
+    private var warmth = 0f
+    private val warmPaint = Paint()
     private var notice: String? = null
     private var flash: String? = null
     private var details: List<String>? = null
@@ -42,7 +44,7 @@ class FrameView(ctx: Context) : View(ctx) {
     val hasPhoto get() = frame != null
 
     /** Affiche [next] (image plein écran, sur le carton de [from]) ; [done] est appelé après le fondu. */
-    fun show(next: Bitmap, from: PrintRenderer, fadeMs: Long = FADE_MS, done: () -> Unit) {
+    fun show(next: Bitmap, from: PrintRenderer.Ground, fadeMs: Long = FADE_MS, done: () -> Unit) {
         notice = null
         val old = frame
         if (old == null) {
@@ -59,10 +61,23 @@ class FrameView(ctx: Context) : View(ctx) {
         }
     }
 
-    private fun setMat(r: PrintRenderer) {
-        mat = r.mat
-        matColor = r.matColor
-        pencil = r.pencil
+    private fun setMat(g: PrintRenderer.Ground) {
+        mat = g.bitmap
+        matColor = g.color
+        pencil = g.pencil
+    }
+
+    /**
+     * Chaleur de la lumière, de 0 (blanc du jour) à 1 (lampes du soir) : un tirage n'émet pas de
+     * lumière, il prend la couleur de celle de la pièce.
+     */
+    fun setWarmth(value: Float) {
+        val v = value.coerceIn(0f, 1f)
+        if (kotlin.math.abs(v - warmth) < 0.01f) return
+        warmth = v
+        warmPaint.colorFilter = if (v <= 0f) null else android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix(floatArrayOf(
+            1f, 0f, 0f, 0f, 0f, 0f, 1f - 0.09f * v, 0f, 0f, 0f, 0f, 0f, 1f - 0.24f * v, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
+        invalidate()
     }
 
     /** Message au centre du carton ; ignoré tant qu'une photo est affichée (elle reste en place). */
@@ -119,6 +134,9 @@ class FrameView(ctx: Context) : View(ctx) {
     }
 
     override fun onDraw(canvas: Canvas) {
+        // Tout ce qui est dessiné passe par le filtre de chaleur de la lumière.
+        val warm = warmth > 0f
+        if (warm) canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), warmPaint)
         canvas.drawColor(matColor)
         mat?.let { canvas.drawBitmap(it, 0f, 0f, null) }
         frame?.let {
@@ -158,6 +176,7 @@ class FrameView(ctx: Context) : View(ctx) {
                 canvas.drawText(line, left + pad, top + pad + detailPaint.textSize * 0.85f + i * lineH, detailPaint)
             }
         }
+        if (warm) canvas.restore()
         if (nightAlpha > 0f) canvas.drawColor(Color.argb((nightAlpha * 255).toInt(), 0, 0, 0))
     }
 

@@ -12,6 +12,12 @@ Versions are numbered year.month.number.
 - Update from the web page: a clear warning that Google Play Protect often refuses it, and what
   to do instead.
 - Counters only count photos that were actually shown.
+- Five new frames beside the mat: white-bordered print, instant print, gallery frame, album
+  page and contact sheet. The last two bring together photos taken on the same day.
+- Three papers (matte, baryta, cotton), three tones (colour, black and white, sepia) and a
+  handwritten caption. Choose one of each or several: the frame then picks at random per page.
+- Brightness can follow the light in the room, read from a Home Assistant illuminance sensor,
+  and the white can turn warmer as the light goes down.
 
 ## 2026.11.4
 

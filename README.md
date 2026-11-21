@@ -13,9 +13,13 @@ page served by the tablet itself.
 
 ## What it does
 
-- **Print look** — a black or cream mat with a bevelled window, lifted blacks, paper-white
-  highlights, slightly held-back colours and paper grain, as strong as you like. Photos are
-  never cropped.
+- **Print look** — lifted blacks, paper-white highlights, slightly held-back colours and paper
+  grain, as strong as you like. Photos are never cropped.
+- **Six frames** — bevelled mat, white-bordered print, instant print, gallery frame, album page
+  and contact sheet; three papers (matte, baryta, cotton); colour, black and white or sepia;
+  printed or handwritten captions. Pick one of each, or several and let the frame vary.
+- **Light like paper** — brightness and warmth follow the time of day, or the real light of the
+  room through a Home Assistant illuminance sensor.
 - **Sources** — people, albums and themes that add up, each with its share of the slideshow.
   Themes are found by content ("dog", "landscape") with Immich's smart search.
   Themes can also be set aside ("screenshot", "document"), people shown more or less often, and

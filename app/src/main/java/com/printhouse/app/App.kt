@@ -275,6 +275,9 @@ class App : Application() {
     /** À appeler quand le lien Home Assistant ou MQTT change. */
     fun refreshLocks() = updateLocks(ha.active || mqtt.active)
 
+    /** La lumière de la pièce a changé (ou sa mesure s'est arrêtée) : luminosité et chaleur suivent. */
+    fun lightChanged() { frame?.applyDisplay() }
+
     /**
      * Avec Home Assistant, la tablette doit rester joignable même écran éteint, pour pouvoir
      * être rallumée : on garde le processeur et le Wi-Fi éveillés.

@@ -216,8 +216,23 @@ back** button, and a button to show them all again.
 
 ![The Appearance section](screenshots/web-look.png)
 
+**Print style** has four lines of choices. Tap one or several on each line: with several, the
+frame picks one at random for every page, and a page keeps its look when you come back to it.
+
+| Line | Choices |
+| --- | --- |
+| Frame | **Mat** — bevelled windows in a board that fills the screen. **White border** — the print with its paper margin, laid on the background. **Instant print** — a wide margin at the bottom with the caption written in it, slightly askew. **Gallery frame** — a walnut moulding around a wide cream mat. **Album page** — prints held by photo corners on black or kraft paper. **Contact sheet** — strips of film with frame numbers |
+| Paper | **Matte** — lifted blacks, soft colours. **Baryta** — deep blacks, neutral white, little grain. **Cotton** — soft, warm and textured |
+| Tone | **Colour**, **black and white**, **sepia**. Colour, when chosen with other tones, keeps one page in two |
+| Caption | **Printed** in pencil-like italics, or **handwritten** |
+
+The album page and the contact sheet bring together photos taken on the same day: up to three
+prints on the album page, three to six frames on the contact sheet. A photo that was alone that
+day takes another of the chosen frames (the white border if there is none). Photos are never
+cropped, in any frame.
+
 - **Board colour** — *Black* is plain and blends into the tablet's bezel. *Cream* is textured
-  like a framing board, with soft room light across it.
+  like a framing board, with soft room light across it; the album page is then kraft paper.
 - **Margin width** — narrow, medium or wide.
 - **Paper look** — how strongly the photo is turned into a matte print. At 100 % blacks are
   lifted, whites take the colour of paper and grain is added; at 0 % the photo is shown as it
@@ -229,9 +244,19 @@ back** button, and a button to show them all again.
 
 ![The Screen & night section](screenshots/web-screen.png)
 
-- **Brightness by time of day** — one brightness for the day and one for the evening, with a
-  gradual half-hour change at each boundary. A dim screen in a dark room looks far more like a
-  print. Turn it off to leave brightness to the tablet.
+- **Light** — a print gives off no light: it takes on the light of the room. You set one
+  brightness for the day and one for the evening, and the frame moves between them. Turn
+  **Set brightness automatically** off to leave brightness to the tablet.
+  - **Follow the time of day** — day and evening start at the hours you give, with a gradual
+    half-hour change at each.
+  - **Follow the light in the room** — the frame reads an illuminance sensor from Home Assistant
+    every 30 seconds (link the frame to Home Assistant with a token first, then pick the sensor
+    of the room the frame is in). Under 5 lux it uses the evening brightness, from 300 lux the
+    day brightness, and a logarithmic scale in between, as the eye does. If the sensor stops
+    answering, the frame falls back to the time of day. Most tablets have no usable light
+    sensor of their own, and a front camera cannot measure room light reliably.
+  - **Warmer white as the light goes down** — off by default. The whole picture takes a warmer
+    cast as it dims, like paper under evening lamps.
 - **Night** — between the start and end times the screen goes black, then the tablet really
   sleeps; it wakes by itself at the end time. During the day the screen always stays on.
   Friday and Saturday nights can have their own hours.
